@@ -19,8 +19,9 @@ type ResolveOptions struct {
 	EnvPrefix string
 }
 
-// Resolve determines the connection config from flags, store, env, or default.
-func Resolve(opts ResolveOptions, store *Store, creds *CredentialStore) (ConnectionConfig, error) {
+// Resolve determines the connection config from flags, stores, env, or default.
+// Stores are checked in order (project-local before global).
+func Resolve(opts ResolveOptions, stores []*Store, creds *CredentialStore) (ConnectionConfig, error) {
 	// 1. Explicit DSN
 	if opts.DSN != "" {
 		return ParseDSN(opts.DSN)
@@ -42,18 +43,23 @@ func Resolve(opts ResolveOptions, store *Store, creds *CredentialStore) (Connect
 		}, nil
 	}
 
-	// 3. Named connection from store
-	if opts.ConnName != "" && store != nil {
-		cfg, err := store.Get(opts.ConnName)
-		if err != nil {
-			return ConnectionConfig{}, err
-		}
-		if creds != nil {
-			if pw, err := creds.GetPassword(opts.ConnName); err == nil {
-				cfg.Password = pw
+	// 3. Named connection from stores (first match wins)
+	if opts.ConnName != "" {
+		for _, store := range stores {
+			if store == nil {
+				continue
+			}
+			cfg, err := store.Get(opts.ConnName)
+			if err == nil {
+				if creds != nil {
+					if pw, err := creds.GetPassword(opts.ConnName); err == nil {
+						cfg.Password = pw
+					}
+				}
+				return cfg, nil
 			}
 		}
-		return cfg, nil
+		return ConnectionConfig{}, fmt.Errorf("connection %q not found", opts.ConnName)
 	}
 
 	// 4. Environment variables
@@ -80,8 +86,11 @@ func Resolve(opts ResolveOptions, store *Store, creds *CredentialStore) (Connect
 		}, nil
 	}
 
-	// 5. Store default
-	if store != nil {
+	// 5. Store default (first match wins)
+	for _, store := range stores {
+		if store == nil {
+			continue
+		}
 		cfg, err := store.Default()
 		if err == nil {
 			if creds != nil {

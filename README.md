@@ -86,7 +86,24 @@ Type-aware cell editor with vim-style controls:
 
 ## Configuration
 
-Config lives at `~/.config/db/config.yaml` (XDG). Connections stored in `~/.config/db/connections.yaml`, passwords in OS keyring.
+Config lives at `~/.config/db/config.yaml` (XDG). Passwords stored in OS keyring.
+
+### Connection Scoping
+
+Connections can be global or project-local:
+
+- **Global**: `~/.config/db/connections.yaml` — available everywhere
+- **Project-local**: `~/.config/db/projects/<repo-path>/connections.yaml` — scoped to a git repository
+
+Use `--local` with connect subcommands to manage project connections:
+
+```
+db connect add --local          # save connection for this repo
+db connect default --local dev  # set project default
+db connect list                 # shows both with SCOPE column
+```
+
+Resolution order: CLI flags > named connection (project then global) > env vars > default (project then global).
 
 ## Development
 

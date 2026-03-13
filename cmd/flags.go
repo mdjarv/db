@@ -38,7 +38,7 @@ func resolveConnection(cmd *cobra.Command) (conn.ConnectionConfig, error) {
 		port = 0
 	}
 
-	store := conn.NewStore(config.ConnectionsFile())
+	stores := connectionStores()
 	creds := conn.NewCredentialStore(conn.OSKeyring{})
 
 	return conn.Resolve(conn.ResolveOptions{
@@ -50,7 +50,17 @@ func resolveConnection(cmd *cobra.Command) (conn.ConnectionConfig, error) {
 		Password: password,
 		DBName:   dbname,
 		SSLMode:  sslmode,
-	}, store, creds)
+	}, stores, creds)
+}
+
+// connectionStores returns [project, global] stores. Project store is nil
+// when not inside a git repository.
+func connectionStores() []*conn.Store {
+	global := conn.NewStore(config.ConnectionsFile())
+	if projFile := config.ProjectConnectionsFile(); projFile != "" {
+		return []*conn.Store{conn.NewStore(projFile), global}
+	}
+	return []*conn.Store{global}
 }
 
 func connectFromFlags(cmd *cobra.Command) (db.Conn, error) {

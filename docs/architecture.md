@@ -114,7 +114,7 @@ type Exporter interface {
 
 3. **TUI components communicate via bubbletea messages only.** No shared mutable state between panes. The app model routes messages.
 
-4. **Connection resolution order**: CLI flags > environment variables > config file > interactive prompt.
+4. **Connection resolution order**: CLI flags > named connection (project-local then global store) > environment variables > store default (project-local then global).
 
 5. **Config follows XDG**: `~/.config/db/config.yaml` for settings, `~/.local/share/db/` for data (history, etc.).
 

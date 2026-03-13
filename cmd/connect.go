@@ -60,9 +60,23 @@ var connectEditCmd = &cobra.Command{
 }
 
 func init() {
+	for _, cmd := range []*cobra.Command{connectAddCmd, connectRemoveCmd, connectDefaultCmd, connectRenameCmd, connectEditCmd} {
+		cmd.Flags().Bool("local", false, "use project-local connection store (git repo scoped)")
+	}
 	connectCmd.AddCommand(connectAddCmd, connectListCmd, connectRemoveCmd,
 		connectDefaultCmd, connectRenameCmd, connectEditCmd)
 	rootCmd.AddCommand(connectCmd)
+}
+
+func connectStore(cmd *cobra.Command) *conn.Store {
+	local, _ := cmd.Flags().GetBool("local")
+	if local {
+		if f := config.ProjectConnectionsFile(); f != "" {
+			return conn.NewStore(f)
+		}
+		// not in a git repo — fall back to global
+	}
+	return conn.NewStore(config.ConnectionsFile())
 }
 
 func prompt(scanner *bufio.Scanner, label, defaultVal string) string {
@@ -79,7 +93,7 @@ func prompt(scanner *bufio.Scanner, label, defaultVal string) string {
 	return val
 }
 
-func runConnectAdd(_ *cobra.Command, _ []string) error {
+func runConnectAdd(cmd *cobra.Command, _ []string) error {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	name := prompt(scanner, "Name", "")
@@ -97,7 +111,7 @@ func runConnectAdd(_ *cobra.Command, _ []string) error {
 	dbname := prompt(scanner, "Database", "")
 	sslmode := prompt(scanner, "SSL Mode", "disable")
 
-	store := conn.NewStore(config.ConnectionsFile())
+	store := connectStore(cmd)
 	cfg := conn.ConnectionConfig{
 		Name:    name,
 		Host:    host,
@@ -123,36 +137,59 @@ func runConnectAdd(_ *cobra.Command, _ []string) error {
 }
 
 func runConnectList(_ *cobra.Command, _ []string) error {
-	store := conn.NewStore(config.ConnectionsFile())
-	conns, err := store.List()
+	type entry struct {
+		cfg    conn.ConnectionConfig
+		source string
+		isDef  bool
+	}
+	var entries []entry
+
+	// Project-local connections
+	if f := config.ProjectConnectionsFile(); f != "" {
+		s := conn.NewStore(f)
+		conns, _ := s.List()
+		defName := s.DefaultName()
+		for _, c := range conns {
+			entries = append(entries, entry{cfg: c, source: "local", isDef: c.Name == defName})
+		}
+	}
+
+	// Global connections
+	s := conn.NewStore(config.ConnectionsFile())
+	conns, err := s.List()
 	if err != nil {
 		return err
 	}
-	if len(conns) == 0 {
+	defName := s.DefaultName()
+	for _, c := range conns {
+		entries = append(entries, entry{cfg: c, source: "global", isDef: c.Name == defName})
+	}
+
+	if len(entries) == 0 {
 		fmt.Println("No saved connections.")
 		return nil
 	}
 
-	defName := store.DefaultName()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(w, "NAME\tHOST\tPORT\tUSER\tDATABASE\tDEFAULT"); err != nil {
+	if _, err := fmt.Fprintln(w, "NAME\tHOST\tPORT\tUSER\tDATABASE\tDEFAULT\tSCOPE"); err != nil {
 		return err
 	}
-	for _, c := range conns {
+	for _, e := range entries {
 		def := ""
-		if c.Name == defName {
+		if e.isDef {
 			def = "*"
 		}
-		if _, err := fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n", c.Name, c.Host, c.Port, c.User, c.DBName, def); err != nil {
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\n",
+			e.cfg.Name, e.cfg.Host, e.cfg.Port, e.cfg.User, e.cfg.DBName, def, e.source); err != nil {
 			return err
 		}
 	}
 	return w.Flush()
 }
 
-func runConnectRemove(_ *cobra.Command, args []string) error {
+func runConnectRemove(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	store := conn.NewStore(config.ConnectionsFile())
+	store := connectStore(cmd)
 
 	if err := store.Remove(name); err != nil {
 		return err
@@ -165,8 +202,8 @@ func runConnectRemove(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConnectDefault(_ *cobra.Command, args []string) error {
-	store := conn.NewStore(config.ConnectionsFile())
+func runConnectDefault(cmd *cobra.Command, args []string) error {
+	store := connectStore(cmd)
 	if err := store.SetDefault(args[0]); err != nil {
 		return err
 	}
@@ -174,8 +211,8 @@ func runConnectDefault(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConnectRename(_ *cobra.Command, args []string) error {
-	store := conn.NewStore(config.ConnectionsFile())
+func runConnectRename(cmd *cobra.Command, args []string) error {
+	store := connectStore(cmd)
 	if err := store.Rename(args[0], args[1]); err != nil {
 		return err
 	}
@@ -191,9 +228,9 @@ func runConnectRename(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConnectEdit(_ *cobra.Command, args []string) error {
+func runConnectEdit(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	store := conn.NewStore(config.ConnectionsFile())
+	store := connectStore(cmd)
 
 	existing, err := store.Get(name)
 	if err != nil {

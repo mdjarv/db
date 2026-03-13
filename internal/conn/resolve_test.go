@@ -56,7 +56,7 @@ func TestResolve_FlagsDefaultPort(t *testing.T) {
 func TestResolve_NamedConnection(t *testing.T) {
 	s, cs := setupStoreWithDefault(t)
 
-	cfg, err := Resolve(ResolveOptions{ConnName: "prod"}, s, cs)
+	cfg, err := Resolve(ResolveOptions{ConnName: "prod"}, []*Store{s}, cs)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestResolve_StoreDefault(t *testing.T) {
 
 	s, cs := setupStoreWithDefault(t)
 
-	cfg, err := Resolve(ResolveOptions{}, s, cs)
+	cfg, err := Resolve(ResolveOptions{}, []*Store{s}, cs)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
