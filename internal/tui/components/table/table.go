@@ -232,46 +232,37 @@ func (m *Model) YankCell() string {
 	return ""
 }
 
-// YankRow returns the current row as CSV.
+// YankRow returns the current row as CSV (data only, no headers).
 func (m *Model) YankRow(sep string) string {
-	return m.formatRange(m.CursorRow, m.CursorRow, 0, len(m.Columns)-1, sep)
+	return m.formatRows(m.CursorRow, m.CursorRow, 0, len(m.Columns)-1, sep)
 }
 
-// YankSelection returns the selected data as CSV.
+// YankSelection returns the selected data as CSV (data only, no headers).
 func (m *Model) YankSelection(sep string) string {
 	switch m.Visual {
 	case VisualLine:
 		startRow, endRow := m.RowRange()
-		return m.formatRange(startRow, endRow, m.LineColStart, m.LineColEnd, sep)
+		return m.formatRows(startRow, endRow, m.LineColStart, m.LineColEnd, sep)
 	case VisualBlock:
 		startRow, endRow := m.RowRange()
 		startCol, endCol := m.BlockColRange()
-		return m.formatRange(startRow, endRow, startCol, endCol, sep)
+		return m.formatRows(startRow, endRow, startCol, endCol, sep)
 	default:
 		return ""
 	}
 }
 
-func (m *Model) formatRange(startRow, endRow, startCol, endCol int, sep string) string {
+func (m *Model) formatRows(startRow, endRow, startCol, endCol int, sep string) string {
 	var sb strings.Builder
-
-	for c := startCol; c <= endCol; c++ {
-		if c > startCol {
-			sb.WriteString(sep)
-		}
-		sb.WriteString(m.Columns[c].Title)
-	}
-	sb.WriteByte('\n')
-
 	for r := startRow; r <= endRow; r++ {
+		if r > startRow {
+			sb.WriteByte('\n')
+		}
 		for c := startCol; c <= endCol; c++ {
 			if c > startCol {
 				sb.WriteString(sep)
 			}
 			sb.WriteString(escapeCSV(m.Rows[r][c], sep))
-		}
-		if r < endRow {
-			sb.WriteByte('\n')
 		}
 	}
 	return sb.String()
@@ -291,6 +282,7 @@ var (
 	separatorColor = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
 	selectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("208"))
+	colSelectStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(lipgloss.Color("94"))
 	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
 )
@@ -363,7 +355,10 @@ func (m *Model) styleCell(text string, row, col int, focused bool) string {
 		if inRow && inCol {
 			return selectStyle.Render(text)
 		}
-		if inRow || inCol {
+		if inCol {
+			return colSelectStyle.Render(text)
+		}
+		if inRow {
 			return dimStyle.Render(text)
 		}
 		return text
