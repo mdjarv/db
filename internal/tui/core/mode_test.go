@@ -10,7 +10,8 @@ func TestModeString(t *testing.T) {
 		{ModeNormal, "NORMAL"},
 		{ModeInsert, "INSERT"},
 		{ModeCommand, "COMMAND"},
-		{ModeVisual, "VISUAL"},
+		{ModeVisualLine, "V-LINE"},
+		{ModeVisualBlock, "V-BLOCK"},
 	}
 	for _, tt := range tests {
 		if got := tt.mode.String(); got != tt.want {
@@ -32,8 +33,11 @@ func TestModeChecks(t *testing.T) {
 	if ModeNormal.IsInsert() {
 		t.Error("ModeNormal.IsInsert() should be false")
 	}
-	if !ModeVisual.IsVisual() {
-		t.Error("ModeVisual.IsVisual() should be true")
+	if !ModeVisualLine.IsVisual() {
+		t.Error("ModeVisualLine.IsVisual() should be true")
+	}
+	if !ModeVisualBlock.IsVisual() {
+		t.Error("ModeVisualBlock.IsVisual() should be true")
 	}
 	if ModeNormal.IsVisual() {
 		t.Error("ModeNormal.IsVisual() should be false")

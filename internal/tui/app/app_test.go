@@ -137,6 +137,27 @@ func TestApp_VisualMode(t *testing.T) {
 	}
 }
 
+func TestApp_VisualBlockMode(t *testing.T) {
+	tm := newTestModel(t)
+
+	// focus result view
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+
+	// v to enter visual block
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+
+	// esc to cancel
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m := finalModel(t, tm)
+
+	if m.mode != core.ModeNormal {
+		t.Errorf("mode after block visual cancel = %s, want NORMAL", m.mode)
+	}
+}
+
 func TestApp_VisualModeOnlyOnResultView(t *testing.T) {
 	tm := newTestModel(t)
 

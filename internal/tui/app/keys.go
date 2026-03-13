@@ -30,7 +30,8 @@ const (
 	ActionHelp
 	ActionResizeGrow
 	ActionResizeShrink
-	ActionModeVisual
+	ActionModeVisualLine
+	ActionModeVisualBlock
 )
 
 // Binding maps a key to an action in a specific mode.
@@ -58,8 +59,10 @@ var globalBindings = []Binding{
 	{Action: ActionFocusPane3, Key: "3", Desc: "pane 3", Mode: core.ModeNormal},
 	{Action: ActionResizeGrow, Key: "+", Desc: "grow pane", Mode: core.ModeNormal},
 	{Action: ActionResizeShrink, Key: "-", Desc: "shrink pane", Mode: core.ModeNormal},
-	{Action: ActionModeVisual, Key: "V", Desc: "visual line mode", Mode: core.ModeNormal},
-	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisual},
+	{Action: ActionModeVisualLine, Key: "V", Desc: "visual line mode", Mode: core.ModeNormal},
+	{Action: ActionModeVisualBlock, Key: "v", Desc: "visual block mode", Mode: core.ModeNormal},
+	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualLine},
+	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualBlock},
 }
 
 // MatchGlobal returns the action matching a key in the given mode.
@@ -95,9 +98,11 @@ func HelpText() string {
 	sb.WriteString("  h/l   - left/right (editor)\n")
 
 	sb.WriteString("\nVisual (results):\n")
-	sb.WriteString("  V     - visual line mode\n")
+	sb.WriteString("  V     - visual line (rows)\n")
+	sb.WriteString("  v     - visual block (rectangle)\n")
 	sb.WriteString("  j/k   - extend row selection\n")
-	sb.WriteString("  h/l   - select column\n")
+	sb.WriteString("  h/l   - extend column selection\n")
+	sb.WriteString("  tab   - toggle row/col axis (V mode)\n")
 	sb.WriteString("  y     - yank selection (CSV)\n")
 	sb.WriteString("  esc   - cancel\n")
 

@@ -113,7 +113,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.mode == core.ModeVisual {
+		if m.mode.IsVisual() {
 			if msg.String() == "esc" {
 				m.resultView.ExitVisual()
 				m.mode = core.ModeNormal
@@ -182,11 +182,17 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 	case ActionResizeShrink:
 		m.leftRatio = max(m.leftRatio-0.05, 0.1)
 		m.recalcLayout()
-	case ActionModeVisual:
+	case ActionModeVisualLine:
 		if m.panes.ActiveID() == pane.ResultView {
-			m.mode = core.ModeVisual
+			m.mode = core.ModeVisualLine
 			m.statusBar.SetMode(m.mode)
-			m.resultView.EnterVisual()
+			m.resultView.EnterVisualLine()
+		}
+	case ActionModeVisualBlock:
+		if m.panes.ActiveID() == pane.ResultView {
+			m.mode = core.ModeVisualBlock
+			m.statusBar.SetMode(m.mode)
+			m.resultView.EnterVisualBlock()
 		}
 	}
 	return m, nil
