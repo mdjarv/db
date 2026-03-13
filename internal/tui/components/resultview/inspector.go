@@ -6,15 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-)
 
-var (
-	inspectorBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2)
-	inspectorTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62"))
-	inspectorType  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 // Inspector shows the full cell value in an overlay.
@@ -66,9 +59,11 @@ func (ins *Inspector) View(containerW, containerH int) string {
 		return ""
 	}
 
-	header := inspectorTitle.Render(ins.column)
+	s := theme.Current().Styles
+
+	header := s.InspectorTitle.Render(ins.column)
 	if ins.typeName != "" {
-		header += " " + inspectorType.Render(ins.typeName)
+		header += " " + s.InspectorType.Render(ins.typeName)
 	}
 
 	contentW := w - 6 // padding + border
@@ -88,7 +83,10 @@ func (ins *Inspector) View(containerW, containerH int) string {
 
 	body := header + "\n\n" + strings.Join(visible, "\n")
 
-	style := inspectorBorder.
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(s.BorderFocused).
+		Padding(1, 2).
 		Width(w).
 		Height(h)
 

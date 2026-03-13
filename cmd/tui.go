@@ -7,9 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/mdjarv/db/internal/config"
 	"github.com/mdjarv/db/internal/db"
 	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/app"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 var tuiCmd = &cobra.Command{
@@ -24,6 +26,8 @@ func init() {
 }
 
 func runTUI(cmd *cobra.Command, _ []string) error {
+	applyTheme(cmd)
+
 	cfg, err := resolveConnection(cmd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "connection error: %v\n", err)
@@ -46,4 +50,22 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return nil
+}
+
+func applyTheme(cmd *cobra.Command) {
+	// CLI flag takes priority
+	name, _ := cmd.Flags().GetString("theme")
+	if name == "" {
+		// fallback to config file
+		name = config.Load().Theme
+	}
+	if name == "" {
+		return // keep default
+	}
+	t, err := theme.Resolve(name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: unknown theme %q, using default\n", name)
+		return
+	}
+	theme.Set(t)
 }

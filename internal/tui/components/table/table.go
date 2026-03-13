@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 // Column defines a table column.
@@ -32,6 +32,12 @@ const (
 	axisCol
 )
 
+// CellKey identifies a cell by row and column index.
+type CellKey struct {
+	Row int
+	Col int
+}
+
 // Model holds the table state.
 type Model struct {
 	Columns   []Column
@@ -52,6 +58,11 @@ type Model struct {
 	LineAnchorCol int
 	LineColStart  int
 	LineColEnd    int
+
+	// Modified cells for data editing (yellow highlight)
+	ModifiedCells map[CellKey]bool
+	// Deleted rows (strikethrough/dim)
+	DeletedRows map[int]bool
 }
 
 // New creates a table model.
@@ -334,27 +345,18 @@ func escapeCSV(val, sep string) string {
 // NullPlaceholder is the display string for NULL values.
 const NullPlaceholder = "\x00NULL\x00"
 
-var (
-	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
-	separatorColor = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
-	selectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("208"))
-	colSelectStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(lipgloss.Color("94"))
-	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
-	nullStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
-)
-
 // View renders the table.
 func (m *Model) View(focused bool) string {
 	if len(m.Columns) == 0 {
 		return ""
 	}
 
+	s := theme.Current().Styles
+
 	vc := m.VisibleCols()
 	endCol := min(m.ColOffset+vc, len(m.Columns))
-	colSep := separatorColor.Render(" │ ")
-	hdrSep := separatorColor.Render("─┼─")
+	colSep := s.Separator.Render(" │ ")
+	hdrSep := s.Separator.Render("─┼─")
 
 	// compute partial column
 	usedWidth := 0
@@ -383,15 +385,15 @@ func (m *Model) View(focused bool) string {
 		}
 		text := padCell(m.Columns[i].Title, m.Columns[i].Width)
 		if m.Visual != VisualNone && !m.isColSelected(i) {
-			sb.WriteString(dimStyle.Render(text))
+			sb.WriteString(s.Dim.Render(text))
 		} else {
-			sb.WriteString(headerStyle.Render(text))
+			sb.WriteString(s.Header.Render(text))
 		}
 	}
 	if partialCol >= 0 {
 		sb.WriteString(colSep)
 		text := padCell(m.Columns[partialCol].Title, partialW)
-		sb.WriteString(dimStyle.Render(text))
+		sb.WriteString(s.Dim.Render(text))
 	}
 	sb.WriteByte('\n')
 
@@ -400,11 +402,11 @@ func (m *Model) View(focused bool) string {
 		if i > m.ColOffset {
 			sb.WriteString(hdrSep)
 		}
-		sb.WriteString(separatorColor.Render(strings.Repeat("─", m.Columns[i].Width)))
+		sb.WriteString(s.Separator.Render(strings.Repeat("─", m.Columns[i].Width)))
 	}
 	if partialCol >= 0 {
 		sb.WriteString(hdrSep)
-		sb.WriteString(separatorColor.Render(strings.Repeat("─", partialW)))
+		sb.WriteString(s.Separator.Render(strings.Repeat("─", partialW)))
 	}
 	sb.WriteByte('\n')
 
@@ -424,14 +426,14 @@ func (m *Model) View(focused bool) string {
 			isNull := val == NullPlaceholder
 			if isNull {
 				text := padCell("NULL", m.Columns[i].Width)
-				styled := m.styleCell(text, r, i, focused)
+				styled := m.styleCell(text, r, i, focused, s)
 				if !m.hasSelectionStyle(r, i, focused) {
-					styled = nullStyle.Render(text)
+					styled = s.Null.Render(text)
 				}
 				sb.WriteString(styled)
 			} else {
 				text := truncateCell(val, m.Columns[i].Width)
-				sb.WriteString(m.styleCell(text, r, i, focused))
+				sb.WriteString(m.styleCell(text, r, i, focused, s))
 			}
 		}
 		if partialCol >= 0 {
@@ -441,9 +443,9 @@ func (m *Model) View(focused bool) string {
 				val = m.Rows[r][partialCol]
 			}
 			if val == NullPlaceholder {
-				sb.WriteString(dimStyle.Render(padCell("NULL", partialW)))
+				sb.WriteString(s.Dim.Render(padCell("NULL", partialW)))
 			} else {
-				sb.WriteString(dimStyle.Render(truncateCell(val, partialW)))
+				sb.WriteString(s.Dim.Render(truncateCell(val, partialW)))
 			}
 		}
 		if r < endRow-1 {
@@ -454,34 +456,40 @@ func (m *Model) View(focused bool) string {
 	return sb.String()
 }
 
-func (m *Model) styleCell(text string, row, col int, focused bool) string {
+func (m *Model) styleCell(text string, row, col int, focused bool, s theme.Styles) string {
 	switch m.Visual {
 	case VisualLine:
 		inRow := m.inRowRange(row)
 		inCol := col >= m.LineColStart && col <= m.LineColEnd
 		if inRow && inCol {
-			return selectStyle.Render(text)
+			return s.Selection.Render(text)
 		}
 		if inCol {
-			return colSelectStyle.Render(text)
+			return s.ColSelection.Render(text)
 		}
 		if inRow {
-			return dimStyle.Render(text)
+			return s.Dim.Render(text)
 		}
 		return text
 
 	case VisualBlock:
 		if m.inRowRange(row) && m.inBlockColRange(col) {
-			return selectStyle.Render(text)
+			return s.Selection.Render(text)
 		}
 		return text
 
 	default:
+		if m.DeletedRows[row] {
+			return s.Deleted.Render(text)
+		}
 		if focused && row == m.CursorRow && col == m.CursorCol {
-			return cursorStyle.Render(text)
+			return s.Cursor.Render(text)
+		}
+		if m.ModifiedCells[CellKey{Row: row, Col: col}] {
+			return s.Modified.Render(text)
 		}
 		if focused && row == m.CursorRow {
-			return cursorRowStyle.Render(text)
+			return s.CursorRow.Render(text)
 		}
 		return text
 	}

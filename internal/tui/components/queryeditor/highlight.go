@@ -6,16 +6,8 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/charmbracelet/lipgloss"
-)
 
-var (
-	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	stringStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("142"))
-	numberStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-	commentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
-	typeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("37"))
-	funcStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("178"))
-	opStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 var sqlLexer chroma.Lexer
@@ -42,24 +34,25 @@ func highlightSQL(line string) string {
 }
 
 func styleForToken(t chroma.TokenType) lipgloss.Style {
+	s := theme.Current().Styles
 	switch t {
 	case chroma.KeywordType:
-		return typeStyle
+		return s.Type
 	case chroma.Keyword, chroma.KeywordDeclaration, chroma.KeywordNamespace,
 		chroma.KeywordReserved, chroma.KeywordConstant, chroma.KeywordPseudo:
-		return keywordStyle
+		return s.Keyword
 	case chroma.LiteralString, chroma.LiteralStringSingle,
 		chroma.LiteralStringAffix, chroma.LiteralStringEscape:
-		return stringStyle
+		return s.String
 	case chroma.LiteralNumber, chroma.LiteralNumberFloat,
 		chroma.LiteralNumberInteger:
-		return numberStyle
+		return s.Number
 	case chroma.Comment, chroma.CommentSingle, chroma.CommentMultiline:
-		return commentStyle
+		return s.Comment
 	case chroma.NameFunction, chroma.NameBuiltin:
-		return funcStyle
+		return s.Function
 	case chroma.Operator, chroma.OperatorWord:
-		return opStyle
+		return s.Operator
 	default:
 		return lipgloss.NewStyle()
 	}

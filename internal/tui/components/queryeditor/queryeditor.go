@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 const undoLimit = 100
@@ -50,12 +51,6 @@ type Model struct {
 	pasteBuffer   string
 	pasteLinewise bool
 }
-
-var (
-	insertCursorStyle = lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("45"))
-	normalCursorStyle = lipgloss.NewStyle().Reverse(true)
-	selectStyle       = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
-)
 
 // New creates a query editor.
 func New() *Model {
@@ -603,16 +598,16 @@ func (m *Model) gutterWidth() int {
 
 // View renders the query editor.
 func (m *Model) View() string {
+	s := theme.Current().Styles
 	var sb strings.Builder
 	vh := m.viewHeight()
 	end := min(m.offset+vh, len(m.lines))
 	gw := m.gutterWidth()
 
-	gutterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	contentWidth := max(m.width-2-gw, 1) // border takes 2
 
 	for i := m.offset; i < end; i++ {
-		gutter := gutterStyle.Render(fmt.Sprintf("%*d ", gw-1, i+1))
+		gutter := s.Gutter.Render(fmt.Sprintf("%*d ", gw-1, i+1))
 		line := m.lines[i]
 
 		var rendered string
@@ -634,9 +629,9 @@ func (m *Model) View() string {
 		}
 	}
 
-	borderColor := lipgloss.Color("240")
+	borderColor := s.BorderUnfocused
 	if m.focused {
-		borderColor = lipgloss.Color("62")
+		borderColor = s.BorderFocused
 	}
 
 	style := lipgloss.NewStyle().
@@ -649,9 +644,10 @@ func (m *Model) View() string {
 }
 
 func (m *Model) renderLineWithCursor(line string) string {
-	cs := normalCursorStyle
+	s := theme.Current().Styles
+	cs := s.NormalCursor
 	if m.mode == core.ModeInsert {
-		cs = insertCursorStyle
+		cs = s.InsertCursor
 	}
 	if m.cursorX >= len(line) {
 		return m.highlightLine(line) + cs.Render(" ")
@@ -712,7 +708,8 @@ func (m *Model) renderLineVisual(line string, lineIdx, contentWidth int) string 
 	sel := line[selStart:selEnd]
 	after := line[selEnd:]
 
-	rendered := m.highlightLine(before) + selectStyle.Render(sel) + m.highlightLine(after)
+	s := theme.Current().Styles
+	rendered := m.highlightLine(before) + s.EditorSelect.Render(sel) + m.highlightLine(after)
 
 	// overlay block cursor on cursor line
 	if lineIdx == m.cursorY && m.cursorX >= selStart && m.cursorX < selEnd {
@@ -728,9 +725,9 @@ func (m *Model) renderLineVisual(line string, lineIdx, contentWidth int) string 
 			afterCur = line[m.cursorX+1 : selEnd]
 		}
 		rendered = m.highlightLine(beforeSel) +
-			selectStyle.Render(beforeCur) +
-			normalCursorStyle.Render(cur) +
-			selectStyle.Render(afterCur) +
+			s.EditorSelect.Render(beforeCur) +
+			s.NormalCursor.Render(cur) +
+			s.EditorSelect.Render(afterCur) +
 			m.highlightLine(after)
 	}
 

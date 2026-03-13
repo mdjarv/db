@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 // ExecuteMsg is sent when a command is submitted.
@@ -29,6 +31,18 @@ var defaultCommands = []Command{
 	{Name: "w", Desc: "run query"},
 	{Name: "set", Desc: "change setting"},
 	{Name: "export", Desc: "export results (csv|json|sql) <file>"},
+	{Name: "new", Desc: "new buffer"},
+	{Name: "enew", Desc: "new buffer"},
+	{Name: "bd", Desc: "close buffer"},
+	{Name: "bn", Desc: "next buffer"},
+	{Name: "bp", Desc: "prev buffer"},
+	{Name: "b", Desc: "switch to buffer N"},
+	{Name: "ls", Desc: "list buffers"},
+	{Name: "buffers", Desc: "list buffers"},
+	{Name: "commit", Desc: "apply and commit pending changes"},
+	{Name: "rollback", Desc: "discard pending changes"},
+	{Name: "changes", Desc: "list pending changes"},
+	{Name: "theme", Desc: "set or list themes"},
 }
 
 // Model is the command bar state.
@@ -155,10 +169,7 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	prompt := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("166")).
-		Bold(true).
-		Render(":")
+	prompt := theme.Current().Styles.CommandPrompt.Render(":")
 
 	input := lipgloss.NewStyle().
 		Width(m.width - 1).

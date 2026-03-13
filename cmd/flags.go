@@ -19,6 +19,7 @@ func init() {
 	f.StringP("dbname", "d", "", "database name")
 	f.String("sslmode", "", "SSL mode")
 	f.StringP("password", "W", "", "database password")
+	f.String("theme", "", "color theme (e.g. default-dark, nord, dracula)")
 }
 
 func resolveConnection(cmd *cobra.Command) (conn.ConnectionConfig, error) {

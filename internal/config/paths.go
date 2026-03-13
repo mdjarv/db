@@ -31,3 +31,13 @@ func DataDir() string {
 func ConnectionsFile() string {
 	return filepath.Join(Dir(), "connections.yaml")
 }
+
+// File returns the path to the main config file.
+func File() string {
+	return filepath.Join(Dir(), "config.yaml")
+}
+
+// ThemesDir returns the path to the custom themes directory.
+func ThemesDir() string {
+	return filepath.Join(Dir(), "themes")
+}

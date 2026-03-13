@@ -85,3 +85,50 @@ type CellInspectMsg struct {
 	TypeName string
 	Value    string
 }
+
+// EditCellMsg signals that a cell edit was confirmed.
+type EditCellMsg struct {
+	Row      int
+	Col      int
+	OldValue string
+	NewValue string
+}
+
+// EditCancelMsg signals that cell editing was cancelled.
+type EditCancelMsg struct{}
+
+// DeleteRowMsg requests deletion of the current row.
+type DeleteRowMsg struct {
+	Row int
+}
+
+// InsertRowMsg requests insertion of a new blank row.
+type InsertRowMsg struct{}
+
+// CommitMsg requests applying and committing pending changes.
+type CommitMsg struct{}
+
+// RollbackMsg requests discarding pending changes.
+type RollbackMsg struct{}
+
+// UndoMsg requests undoing the last change.
+type UndoMsg struct{}
+
+// ChangesMsg requests listing pending changes.
+type ChangesMsg struct{}
+
+// ConfirmMsg carries the result of a confirmation dialog.
+type ConfirmMsg struct {
+	Action    string
+	Confirmed bool
+}
+
+// PendingChangesMsg updates the status bar with change count.
+type PendingChangesMsg struct {
+	Count int
+}
+
+// EditingDisabledMsg signals that editing is not available.
+type EditingDisabledMsg struct {
+	Reason string
+}

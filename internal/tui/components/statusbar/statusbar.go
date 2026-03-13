@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 // Model is the status bar state.
@@ -15,13 +16,15 @@ type Model struct {
 	connStr string
 	message string
 	txMode  string
+	bufIdx  int
+	bufCnt  int
 	width   int
 }
 
 // New creates a status bar.
 func New() *Model {
 	return &Model{
-		txMode: "auto",
+		txMode: "txn",
 	}
 }
 
@@ -40,62 +43,54 @@ func (m *Model) SetConn(s string) { m.connStr = s }
 // SetTxMode sets the transaction mode display.
 func (m *Model) SetTxMode(s string) { m.txMode = s }
 
+// SetBuffer sets the buffer indicator display.
+func (m *Model) SetBuffer(idx, count int) { m.bufIdx = idx; m.bufCnt = count }
+
 // View renders the status bar.
 func (m *Model) View() string {
-	modeStyle := lipgloss.NewStyle().
-		Bold(true).
-		Padding(0, 1)
+	s := theme.Current().Styles
 
+	var modeStyle lipgloss.Style
 	switch m.mode {
 	case core.ModeInsert:
-		modeStyle = modeStyle.
-			Background(lipgloss.Color("28")).
-			Foreground(lipgloss.Color("15"))
+		modeStyle = s.ModeInsert
 	case core.ModeCommand:
-		modeStyle = modeStyle.
-			Background(lipgloss.Color("166")).
-			Foreground(lipgloss.Color("15"))
+		modeStyle = s.ModeCommand
 	default:
-		modeStyle = modeStyle.
-			Background(lipgloss.Color("62")).
-			Foreground(lipgloss.Color("15"))
+		modeStyle = s.ModeNormal
 	}
 
 	modeStr := modeStyle.Render(m.mode.String())
 
 	var connStr string
 	if m.connStr != "" {
-		connStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("78")).
-			Padding(0, 1)
-		connStr = connStyle.Render("\uf1c0 " + m.connStr)
+		connStr = s.ConnectedFG.Render("\uf1c0 " + m.connStr)
 	} else {
-		connStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Padding(0, 1)
-		connStr = connStyle.Render("\uf1c0 disconnected")
+		connStr = s.DisconnectedFG.Render("\uf1c0 disconnected")
 	}
 
-	txStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Padding(0, 1)
-	txStr := txStyle.Render(fmt.Sprintf("tx:%s", m.txMode))
+	txStr := s.TxFG.Render(fmt.Sprintf("tx:%s", m.txMode))
 
-	left := modeStr + connStr
+	var bufStr string
+	if m.bufCnt > 1 {
+		bufStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Padding(0, 1)
+		bufStr = bufStyle.Render(fmt.Sprintf("[%d/%d]", m.bufIdx, m.bufCnt))
+	}
+
+	left := modeStr + connStr + bufStr
 	right := txStr
-
-	msgStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252"))
 
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
 	msgW := max(m.width-leftW-rightW, 0)
 
-	msg := msgStyle.Width(msgW).Render(m.message)
+	msg := s.StatusBarFG.Width(msgW).Render(m.message)
 
 	bar := lipgloss.NewStyle().
 		Width(m.width).
-		Background(lipgloss.Color("236"))
+		Background(s.StatusBarBG)
 
 	return bar.Render(left + msg + right)
 }

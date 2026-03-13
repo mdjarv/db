@@ -32,6 +32,8 @@ const (
 	ActionResizeShrink
 	ActionModeVisualLine
 	ActionModeVisualBlock
+	ActionBufferNext
+	ActionBufferPrev
 )
 
 // Binding maps a key to an action in a specific mode.
@@ -121,11 +123,29 @@ func HelpText() string {
 	sb.WriteString("  y     - yank selection (CSV)\n")
 	sb.WriteString("  esc   - cancel\n")
 
+	sb.WriteString("\nEditing (results):\n")
+	sb.WriteString("  e       - edit cell\n")
+	sb.WriteString("  dR      - delete row\n")
+	sb.WriteString("  oR      - insert row\n")
+	sb.WriteString("  ctrl+z  - undo last change\n")
+	sb.WriteString("  :commit   - apply changes\n")
+	sb.WriteString("  :rollback - discard changes\n")
+	sb.WriteString("  :changes  - list changes\n")
+
+	sb.WriteString("\nBuffers:\n")
+	sb.WriteString("  gt/gT       - next/prev buffer\n")
+	sb.WriteString("  :new/:enew  - new buffer\n")
+	sb.WriteString("  :bd         - close buffer\n")
+	sb.WriteString("  :bn/:bp     - next/prev buffer\n")
+	sb.WriteString("  :b N        - switch to buffer N\n")
+	sb.WriteString("  :ls         - list buffers\n")
+
 	sb.WriteString("\nCommands:\n")
 	sb.WriteString("  :q    - quit\n")
 	sb.WriteString("  :w    - run query\n")
 	sb.WriteString("  :set  - change setting\n")
 	sb.WriteString("  :export csv|json|sql <file>\n")
+	sb.WriteString("  :theme <name> - switch theme\n")
 
 	sb.WriteString("\n  ?     - toggle this help\n")
 	sb.WriteString("  ctrl+c - quit\n")

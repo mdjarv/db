@@ -11,11 +11,10 @@ import (
 
 	"github.com/mdjarv/db/internal/tui/components/table"
 	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 const defaultSeparator = ","
-
-var statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 // Model is the result view state.
 type Model struct {
@@ -32,6 +31,16 @@ type Model struct {
 	duration time.Duration
 	errMsg   string
 	hasData  bool
+
+	// cell editing
+	editing      bool
+	editInput    string
+	editRow      int
+	editCol      int
+	editOriginal string
+
+	// operator pending (for dR, oR sequences)
+	pendingOp string
 }
 
 // New creates a result view with empty state.
@@ -120,6 +129,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.inspector.Update(km)
 	}
 
+	if m.editing {
+		return m.updateEdit(km)
+	}
+
 	switch m.table.Visual {
 	case table.VisualLine:
 		return m.updateVisualLine(km)
@@ -130,8 +143,29 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	}
 }
 
+// IsEditing returns whether cell editing is active.
+func (m *Model) IsEditing() bool { return m.editing }
+
 func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
-	switch km.String() {
+	key := km.String()
+
+	// handle pending operator
+	if m.pendingOp != "" {
+		op := m.pendingOp
+		m.pendingOp = ""
+		if key == "R" {
+			switch op {
+			case "d":
+				row := m.table.CursorRow
+				return func() tea.Msg { return core.DeleteRowMsg{Row: row} }
+			case "o":
+				return func() tea.Msg { return core.InsertRowMsg{} }
+			}
+		}
+		// invalid sequence, fall through
+	}
+
+	switch key {
 	case "j", "down":
 		m.table.MoveDown()
 	case "k", "up":
@@ -164,8 +198,122 @@ func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 	case "Y":
 		content := m.table.YankRow(m.separator)
 		return func() tea.Msg { return core.YankMsg{Content: content} }
+	case "e":
+		return m.startEdit()
+	case "d":
+		m.pendingOp = "d"
+	case "o":
+		m.pendingOp = "o"
+	case "ctrl+z":
+		return func() tea.Msg { return core.UndoMsg{} }
 	}
 	return nil
+}
+
+func (m *Model) startEdit() tea.Cmd {
+	if !m.hasData || len(m.table.Rows) == 0 {
+		return nil
+	}
+	row := m.table.CursorRow
+	col := m.table.CursorCol
+	if row >= len(m.table.Rows) || col >= len(m.table.Rows[row]) {
+		return nil
+	}
+	val := m.table.Rows[row][col]
+	if val == table.NullPlaceholder {
+		val = ""
+	}
+	m.editing = true
+	m.editRow = row
+	m.editCol = col
+	m.editOriginal = m.table.Rows[row][col]
+	m.editInput = val
+	return func() tea.Msg { return core.ModeChangedMsg{Mode: core.ModeEdit} }
+}
+
+func (m *Model) updateEdit(km tea.KeyMsg) tea.Cmd {
+	switch km.Type {
+	case tea.KeyEsc:
+		m.editing = false
+		return func() tea.Msg { return core.EditCancelMsg{} }
+	case tea.KeyEnter:
+		m.editing = false
+		row := m.editRow
+		col := m.editCol
+		oldVal := m.editOriginal
+		newVal := m.editInput
+		if newVal == "" {
+			newVal = table.NullPlaceholder
+		}
+		// update display value
+		if row < len(m.table.Rows) && col < len(m.table.Rows[row]) {
+			m.table.Rows[row][col] = newVal
+		}
+		return func() tea.Msg {
+			return core.EditCellMsg{Row: row, Col: col, OldValue: oldVal, NewValue: newVal}
+		}
+	case tea.KeyBackspace:
+		if len(m.editInput) > 0 {
+			m.editInput = m.editInput[:len(m.editInput)-1]
+		}
+	case tea.KeyRunes:
+		m.editInput += string(km.Runes)
+	}
+	return nil
+}
+
+var editStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("232")).
+	Background(lipgloss.Color("220"))
+
+func (m *Model) editOverlay() string {
+	colName := ""
+	if m.editCol < len(m.columns) {
+		colName = m.columns[m.editCol].Name
+	}
+	label := lipgloss.NewStyle().Bold(true).Render("Edit " + colName + ": ")
+	input := editStyle.Render(m.editInput + "\u2588")
+	return label + input
+}
+
+// MarkModified marks a cell as modified (yellow highlight).
+func (m *Model) MarkModified(row, col int) {
+	if m.table.ModifiedCells == nil {
+		m.table.ModifiedCells = make(map[table.CellKey]bool)
+	}
+	m.table.ModifiedCells[table.CellKey{Row: row, Col: col}] = true
+}
+
+// MarkDeleted marks a row as pending deletion.
+func (m *Model) MarkDeleted(row int) {
+	if m.table.DeletedRows == nil {
+		m.table.DeletedRows = make(map[int]bool)
+	}
+	m.table.DeletedRows[row] = true
+}
+
+// UnmarkDeleted removes the deletion mark from a row.
+func (m *Model) UnmarkDeleted(row int) {
+	delete(m.table.DeletedRows, row)
+}
+
+// UnmarkModified removes the modified mark from a cell.
+func (m *Model) UnmarkModified(row, col int) {
+	delete(m.table.ModifiedCells, table.CellKey{Row: row, Col: col})
+}
+
+// ClearModified removes all modified/deleted marks.
+func (m *Model) ClearModified() {
+	m.table.ModifiedCells = nil
+	m.table.DeletedRows = nil
+}
+
+// RestoreCell restores the original value of a cell.
+func (m *Model) RestoreCell(row, col int, value string) {
+	if row < len(m.table.Rows) && col < len(m.table.Rows[row]) {
+		m.table.Rows[row][col] = value
+	}
+	m.UnmarkModified(row, col)
 }
 
 func (m *Model) inspectCell() tea.Cmd {
@@ -234,12 +382,14 @@ func (m *Model) updateVisualBlock(km tea.KeyMsg) tea.Cmd {
 
 // View renders the result pane.
 func (m *Model) View() string {
-	borderColor := lipgloss.Color("240")
+	t := theme.Current().Styles
+
+	borderColor := t.BorderUnfocused
 	if m.focused {
-		borderColor = lipgloss.Color("62")
+		borderColor = t.BorderFocused
 	}
 	if m.table.Visual != table.VisualNone {
-		borderColor = lipgloss.Color("208")
+		borderColor = t.BorderVisual
 	}
 
 	innerH := m.height - 2
@@ -256,12 +406,11 @@ func (m *Model) View() string {
 	}
 
 	if m.errMsg != "" {
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-		return style.Render(errStyle.Render("Error: " + m.errMsg))
+		return style.Render(t.Error.Render("Error: " + m.errMsg))
 	}
 
 	if !m.hasData {
-		return style.Render(statusStyle.Render("No results"))
+		return style.Render(t.Dim.Render("No results"))
 	}
 
 	// render with custom bottom border containing status
@@ -273,6 +422,9 @@ func (m *Model) View() string {
 		Height(innerH)
 
 	content := m.table.View(m.focused)
+	if m.editing {
+		content += "\n" + m.editOverlay()
+	}
 	top := noBottom.Render(content)
 
 	status := m.statusLine()
@@ -366,3 +518,23 @@ func (m *Model) SetSize(w, h int) {
 
 // SetSeparator sets the CSV separator.
 func (m *Model) SetSeparator(sep string) { m.separator = sep }
+
+// TableCursorRow returns the result table cursor row.
+func (m *Model) TableCursorRow() int { return m.table.CursorRow }
+
+// TableCursorCol returns the result table cursor column.
+func (m *Model) TableCursorCol() int { return m.table.CursorCol }
+
+// TableRowOffset returns the result table row scroll offset.
+func (m *Model) TableRowOffset() int { return m.table.RowOffset }
+
+// TableColOffset returns the result table column scroll offset.
+func (m *Model) TableColOffset() int { return m.table.ColOffset }
+
+// SetTableCursor restores the result table cursor and scroll positions.
+func (m *Model) SetTableCursor(cursorRow, cursorCol, rowOffset, colOffset int) {
+	m.table.CursorRow = cursorRow
+	m.table.CursorCol = cursorCol
+	m.table.RowOffset = rowOffset
+	m.table.ColOffset = colOffset
+}

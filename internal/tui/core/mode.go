@@ -11,6 +11,7 @@ const (
 	ModeCommand
 	ModeVisualLine
 	ModeVisualBlock
+	ModeEdit // inline cell editing
 )
 
 // String returns the display name of the mode.
@@ -24,6 +25,8 @@ func (m Mode) String() string {
 		return "V-LINE"
 	case ModeVisualBlock:
 		return "V-BLOCK"
+	case ModeEdit:
+		return "EDIT"
 	default:
 		return "NORMAL"
 	}
@@ -40,3 +43,6 @@ func (m Mode) IsNormal() bool { return m == ModeNormal }
 
 // IsVisual returns true if mode is any visual mode.
 func (m Mode) IsVisual() bool { return m == ModeVisualLine || m == ModeVisualBlock }
+
+// IsEdit returns true if mode is Edit (inline cell editing).
+func (m Mode) IsEdit() bool { return m == ModeEdit }
