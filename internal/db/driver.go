@@ -16,6 +16,11 @@ type Conn interface {
 	Close(ctx context.Context) error
 }
 
+// TypeIntrospector provides detailed type information for debugging.
+type TypeIntrospector interface {
+	TypeDetail(oid uint32) TypeDetail
+}
+
 // Tx is a database transaction.
 type Tx interface {
 	Query(ctx context.Context, sql string, args ...any) (Result, error)

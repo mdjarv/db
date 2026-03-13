@@ -55,7 +55,16 @@ func (m *Model) handleEditRequest(msg core.EditRequestMsg) (Model, tea.Cmd) {
 	m.mode = core.ModeEdit
 	m.statusBar.SetMode(m.mode)
 	nullable := m.columnNullable(msg.ColName)
-	m.editDialog.Open(msg.Row, msg.Col, msg.ColName, msg.TypeName, msg.Value, nullable)
+	m.editDialog.Open(editdialog.OpenOpts{
+		Row:             msg.Row,
+		Col:             msg.Col,
+		ColName:         msg.ColName,
+		TypeName:        msg.TypeName,
+		Value:           msg.Value,
+		Nullable:        nullable,
+		EnumValues:      msg.EnumValues,
+		CompositeFields: convertEditCompositeFields(msg.CompositeFields),
+	})
 	return *m, nil
 }
 
@@ -422,6 +431,17 @@ func (m *Model) findRowForPK(pk editor.PKValue) int {
 		}
 	}
 	return -1
+}
+
+func convertEditCompositeFields(fields []core.CompositeField) []editdialog.CompositeField {
+	if fields == nil {
+		return nil
+	}
+	out := make([]editdialog.CompositeField, len(fields))
+	for i, f := range fields {
+		out[i] = editdialog.CompositeField{Name: f.Name, TypeName: f.TypeName}
+	}
+	return out
 }
 
 func formatPKDesc(pk editor.PKValue) string {

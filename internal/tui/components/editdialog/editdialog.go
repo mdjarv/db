@@ -22,6 +22,23 @@ type SubmitMsg struct {
 // CancelMsg signals the edit was cancelled.
 type CancelMsg struct{}
 
+// OpenOpts configures the edit dialog when opening.
+type OpenOpts struct {
+	Row, Col        int
+	ColName         string
+	TypeName        string
+	Value           string
+	Nullable        bool
+	EnumValues      []string
+	CompositeFields []CompositeField
+}
+
+// CompositeField describes a field within a composite type.
+type CompositeField struct {
+	Name     string
+	TypeName string
+}
+
 type focus int
 
 const (
@@ -41,10 +58,7 @@ type Model struct {
 	oldValue string
 	nullable bool
 
-	lines     []string
-	cursorRow int
-	cursorCol int
-
+	mode  inputMode
 	focus focus
 	width int
 }
@@ -58,23 +72,22 @@ func New() *Model {
 func (m *Model) IsActive() bool { return m.active }
 
 // Open shows the edit dialog for a cell value.
-func (m *Model) Open(row, col int, colName, typeName, value string, nullable bool) {
+func (m *Model) Open(opts OpenOpts) {
 	m.active = true
-	m.row = row
-	m.col = col
-	m.colName = colName
-	m.typeName = typeName
-	m.oldValue = value
-	m.nullable = nullable
-	m.lines = strings.Split(value, "\n")
-	m.cursorRow = 0
-	m.cursorCol = len(m.lines[0])
+	m.row = opts.Row
+	m.col = opts.Col
+	m.colName = opts.ColName
+	m.typeName = opts.TypeName
+	m.oldValue = opts.Value
+	m.nullable = opts.Nullable
+	m.mode = resolveMode(opts)
 	m.focus = focusInput
 }
 
 // Close dismisses the dialog.
 func (m *Model) Close() {
 	m.active = false
+	m.mode = nil
 }
 
 // SetWidth sets the render width hint.
@@ -103,68 +116,30 @@ func (m *Model) Update(msg tea.KeyMsg) tea.Cmd {
 		if m.focus != focusInput {
 			return m.activateButton()
 		}
-		// enter in input = submit value
-		return m.submit(false)
+		if m.mode != nil && m.mode.SubmitsOnEnter() {
+			return m.submit(false)
+		}
+		// delegate enter to mode
+		if m.mode != nil {
+			return m.mode.Update(msg)
+		}
+		return nil
 	}
 
-	// keys only for input focus
-	if m.focus == focusInput {
-		return m.updateInput(msg)
+	if m.focus == focusInput && m.mode != nil {
+		return m.mode.Update(msg)
 	}
 
-	return nil
-}
-
-func (m *Model) updateInput(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
-	case tea.KeyCtrlJ:
-		m.insertNewline()
-
-	case tea.KeyBackspace:
-		m.backspace()
-
-	case tea.KeyDelete:
-		m.delete()
-
-	case tea.KeyLeft:
-		m.moveLeft()
-
-	case tea.KeyRight:
-		m.moveRight()
-
-	case tea.KeyUp:
-		if m.cursorRow > 0 {
-			m.cursorRow--
-			m.cursorCol = min(m.cursorCol, len(m.lines[m.cursorRow]))
-		}
-
-	case tea.KeyDown:
-		if m.cursorRow < len(m.lines)-1 {
-			m.cursorRow++
-			m.cursorCol = min(m.cursorCol, len(m.lines[m.cursorRow]))
-		}
-
-	case tea.KeyHome:
-		m.cursorCol = 0
-
-	case tea.KeyEnd:
-		m.cursorCol = len(m.lines[m.cursorRow])
-
-	case tea.KeySpace:
-		m.insertRune(' ')
-
-	case tea.KeyRunes:
-		for _, r := range msg.Runes {
-			m.insertRune(r)
-		}
-	}
 	return nil
 }
 
 func (m *Model) submit(isNull bool) tea.Cmd {
-	m.Close()
 	row, col, oldVal := m.row, m.col, m.oldValue
-	newVal := m.value()
+	newVal := ""
+	if m.mode != nil {
+		newVal = m.mode.Value()
+	}
+	m.Close()
 	return func() tea.Msg {
 		return SubmitMsg{Row: row, Col: col, OldValue: oldVal, NewValue: newVal, IsNull: isNull}
 	}
@@ -220,72 +195,6 @@ func (m *Model) cycleBackward() {
 	}
 }
 
-func (m *Model) value() string {
-	return strings.Join(m.lines, "\n")
-}
-
-func (m *Model) insertRune(r rune) {
-	line := m.lines[m.cursorRow]
-	m.lines[m.cursorRow] = line[:m.cursorCol] + string(r) + line[m.cursorCol:]
-	m.cursorCol++
-}
-
-func (m *Model) insertNewline() {
-	line := m.lines[m.cursorRow]
-	before := line[:m.cursorCol]
-	after := line[m.cursorCol:]
-	m.lines[m.cursorRow] = before
-	rest := make([]string, len(m.lines)-m.cursorRow-1)
-	copy(rest, m.lines[m.cursorRow+1:])
-	m.lines = append(m.lines[:m.cursorRow+1], after)
-	m.lines = append(m.lines, rest...)
-	m.cursorRow++
-	m.cursorCol = 0
-}
-
-func (m *Model) backspace() {
-	if m.cursorCol > 0 {
-		line := m.lines[m.cursorRow]
-		m.lines[m.cursorRow] = line[:m.cursorCol-1] + line[m.cursorCol:]
-		m.cursorCol--
-	} else if m.cursorRow > 0 {
-		prev := m.lines[m.cursorRow-1]
-		m.cursorCol = len(prev)
-		m.lines[m.cursorRow-1] = prev + m.lines[m.cursorRow]
-		m.lines = append(m.lines[:m.cursorRow], m.lines[m.cursorRow+1:]...)
-		m.cursorRow--
-	}
-}
-
-func (m *Model) delete() {
-	line := m.lines[m.cursorRow]
-	if m.cursorCol < len(line) {
-		m.lines[m.cursorRow] = line[:m.cursorCol] + line[m.cursorCol+1:]
-	} else if m.cursorRow < len(m.lines)-1 {
-		m.lines[m.cursorRow] = line + m.lines[m.cursorRow+1]
-		m.lines = append(m.lines[:m.cursorRow+1], m.lines[m.cursorRow+2:]...)
-	}
-}
-
-func (m *Model) moveLeft() {
-	if m.cursorCol > 0 {
-		m.cursorCol--
-	} else if m.cursorRow > 0 {
-		m.cursorRow--
-		m.cursorCol = len(m.lines[m.cursorRow])
-	}
-}
-
-func (m *Model) moveRight() {
-	line := m.lines[m.cursorRow]
-	if m.cursorCol < len(line) {
-		m.cursorCol++
-	} else if m.cursorRow < len(m.lines)-1 {
-		m.cursorRow++
-		m.cursorCol = 0
-	}
-}
-
 // View renders the edit dialog.
 func (m *Model) View(containerW, containerH int) string {
 	if !m.active {
@@ -311,48 +220,24 @@ func (m *Model) View(containerW, containerH int) string {
 	sb.WriteString(titleStyle.Render(title))
 	sb.WriteString("\n\n")
 
-	// input area — background highlight, no nested border
-	inputBg := lipgloss.Color("236")
-	if m.focus == focusInput {
-		inputBg = lipgloss.Color("238")
+	// input area via mode
+	if m.mode != nil {
+		sb.WriteString(m.mode.View(contentW, m.focus == focusInput, t))
 	}
-	inputStyle := lipgloss.NewStyle().
-		Background(inputBg).
-		Width(contentW).
-		Padding(0, 1)
-
-	var inputContent strings.Builder
-	for i, line := range m.lines {
-		if i > 0 {
-			inputContent.WriteByte('\n')
-		}
-		if m.focus == focusInput && i == m.cursorRow {
-			col := min(m.cursorCol, len(line))
-			before := line[:col]
-			cursorChar := " "
-			after := ""
-			if col < len(line) {
-				cursorChar = string(line[col])
-				after = line[col+1:]
-			}
-			cursor := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("232")).
-				Background(t.BorderFocused).
-				Render(cursorChar)
-			inputContent.WriteString(before)
-			inputContent.WriteString(cursor)
-			inputContent.WriteString(after)
-		} else {
-			inputContent.WriteString(line)
-		}
-	}
-
-	sb.WriteString(inputStyle.Render(inputContent.String()))
 	sb.WriteString("\n\n")
 
 	// hint
+	hint := ""
+	if m.mode != nil {
+		hint = m.mode.Hint()
+	}
+	if hint != "" {
+		hint += " | Tab cycle"
+	} else {
+		hint = "Tab cycle"
+	}
 	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	sb.WriteString(hintStyle.Render("Ctrl+J newline | Tab cycle"))
+	sb.WriteString(hintStyle.Render(hint))
 	sb.WriteString("\n\n")
 
 	// buttons
@@ -380,15 +265,7 @@ func (m *Model) renderButtons(t theme.Styles) string {
 		Background(lipgloss.Color("239")).
 		Padding(0, 2)
 
-	btnDisabled := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("242")).
-		Background(lipgloss.Color("236")).
-		Padding(0, 2)
-
 	style := func(f focus) lipgloss.Style {
-		if f == focusNull && !m.nullable {
-			return btnDisabled
-		}
 		if m.focus == f {
 			return btnActive
 		}
@@ -396,8 +273,11 @@ func (m *Model) renderButtons(t theme.Styles) string {
 	}
 
 	ok := style(focusOK).Render("OK")
-	null := style(focusNull).Render("NULL")
 	cancel := style(focusCancel).Render("Cancel")
 
-	return ok + "  " + null + "  " + cancel
+	if m.nullable {
+		null := style(focusNull).Render("NULL")
+		return ok + "  " + null + "  " + cancel
+	}
+	return ok + "  " + cancel
 }

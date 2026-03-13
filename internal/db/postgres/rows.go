@@ -6,14 +6,22 @@ import (
 	"github.com/mdjarv/db/internal/db"
 )
 
-func buildResult(rows pgx.Rows) db.Result {
+func buildResult(rows pgx.Rows, tm *TypeMap) db.Result {
 	fds := rows.FieldDescriptions()
 	cols := make([]db.Column, len(fds))
 	for i, fd := range fds {
 		cols[i] = db.Column{
-			Name:     fd.Name,
-			TypeName: oidToTypeName(fd.DataTypeOID),
-			TypeOID:  fd.DataTypeOID,
+			Name:       fd.Name,
+			TypeName:   tm.Resolve(fd.DataTypeOID),
+			TypeOID:    fd.DataTypeOID,
+			EnumValues: tm.EnumValues(fd.DataTypeOID),
+		}
+		if pgFields := tm.CompositeFields(fd.DataTypeOID); pgFields != nil {
+			dbFields := make([]db.CompositeField, len(pgFields))
+			for j, f := range pgFields {
+				dbFields[j] = db.CompositeField{Name: f.Name, TypeName: f.TypeName}
+			}
+			cols[i].CompositeFields = dbFields
 		}
 	}
 	return db.Result{

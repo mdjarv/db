@@ -206,6 +206,7 @@ db query --format csv "..." # query with format (csv, json, sql, table)
 db tables                   # list tables
 db tables --schema <name>   # list tables in schema
 db describe <table>         # show table schema
+db introspect <table>       # show type introspection details (OIDs, enum values, composite fields)
 ```
 
 Global flags: `--connection <name>`, `--dsn <url>`, `--host`, `--port`, `--user`, `--password`, `--dbname`, `--sslmode`

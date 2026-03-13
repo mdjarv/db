@@ -76,7 +76,11 @@ func (p *pgInspector) Columns(ctx context.Context, schema, table string) ([]Colu
 	const q = `
 SELECT
 	c.column_name,
-	c.data_type,
+	CASE
+		WHEN c.data_type = 'ARRAY' THEN substring(c.udt_name from 2) || '[]'
+		WHEN c.data_type = 'USER-DEFINED' THEN c.udt_name
+		ELSE c.data_type
+	END AS data_type,
 	CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS nullable,
 	COALESCE(c.column_default, '') AS col_default,
 	COALESCE(pk.is_pk, false) AS is_pk,

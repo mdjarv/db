@@ -462,7 +462,12 @@ func (m Model) executeQuery(sql string) tea.Cmd {
 
 		cols := make([]core.ResultColumn, len(result.Columns))
 		for i, c := range result.Columns {
-			cols[i] = core.ResultColumn{Name: c.Name, TypeName: c.TypeName}
+			cols[i] = core.ResultColumn{
+				Name:            c.Name,
+				TypeName:        c.TypeName,
+				EnumValues:      c.EnumValues,
+				CompositeFields: convertCompositeFields(c.CompositeFields),
+			}
 		}
 
 		var rows [][]string
@@ -489,13 +494,49 @@ func (m Model) executeQuery(sql string) tea.Cmd {
 	}
 }
 
+func convertCompositeFields(fields []db.CompositeField) []core.CompositeField {
+	if fields == nil {
+		return nil
+	}
+	out := make([]core.CompositeField, len(fields))
+	for i, f := range fields {
+		out[i] = core.CompositeField{Name: f.Name, TypeName: f.TypeName}
+	}
+	return out
+}
+
 func formatValue(v any) string {
 	switch val := v.(type) {
 	case [16]byte:
 		return fmt.Sprintf("%x-%x-%x-%x-%x", val[0:4], val[4:6], val[6:8], val[8:10], val[10:16])
+	case []any:
+		return formatSlice(val)
+	case []string:
+		parts := make([]any, len(val))
+		for i, s := range val {
+			parts[i] = s
+		}
+		return formatSlice(parts)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+func formatSlice(vals []any) string {
+	var sb strings.Builder
+	sb.WriteByte('{')
+	for i, v := range vals {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		if v == nil {
+			sb.WriteString("NULL")
+		} else {
+			fmt.Fprintf(&sb, "%v", v)
+		}
+	}
+	sb.WriteByte('}')
+	return sb.String()
 }
 
 // M7: schema loading

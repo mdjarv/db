@@ -30,11 +30,14 @@ func (d *Driver) Connect(ctx context.Context, dsn string) (db.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: connect: %w", err)
 	}
-	return &conn{pool: pool}, nil
+
+	tm := LoadTypeMap(ctx, pool)
+	return &conn{pool: pool, tm: tm}, nil
 }
 
 type conn struct {
 	pool *pgxpool.Pool
+	tm   *TypeMap
 }
 
 func (c *conn) Query(ctx context.Context, sql string, args ...any) (db.Result, error) {
@@ -42,7 +45,7 @@ func (c *conn) Query(ctx context.Context, sql string, args ...any) (db.Result, e
 	if err != nil {
 		return db.Result{}, fmt.Errorf("postgres: query: %w", err)
 	}
-	return buildResult(rows), nil
+	return buildResult(rows, c.tm), nil
 }
 
 func (c *conn) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult, error) {
@@ -58,7 +61,27 @@ func (c *conn) Begin(ctx context.Context) (db.Tx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: begin: %w", err)
 	}
-	return &tx{pgTx: pgTx}, nil
+	return &tx{pgTx: pgTx, tm: c.tm}, nil
+}
+
+func (c *conn) TypeDetail(oid uint32) db.TypeDetail {
+	d := db.TypeDetail{
+		OID:        oid,
+		Name:       c.tm.Resolve(oid),
+		EnumValues: c.tm.EnumValues(oid),
+	}
+	if pgFields := c.tm.CompositeFields(oid); pgFields != nil {
+		d.CompositeFields = make([]db.CompositeField, len(pgFields))
+		for i, f := range pgFields {
+			d.CompositeFields[i] = db.CompositeField{Name: f.Name, TypeName: f.TypeName}
+		}
+	}
+	if elemOID, ok := c.tm.ElemOID(oid); ok {
+		d.IsArray = true
+		d.ElemOID = elemOID
+		d.ElemTypeName = c.tm.Resolve(elemOID)
+	}
+	return d
 }
 
 func (c *conn) Close(_ context.Context) error {
@@ -68,6 +91,7 @@ func (c *conn) Close(_ context.Context) error {
 
 type tx struct {
 	pgTx pgx.Tx
+	tm   *TypeMap
 }
 
 func (t *tx) Query(ctx context.Context, sql string, args ...any) (db.Result, error) {
@@ -75,7 +99,7 @@ func (t *tx) Query(ctx context.Context, sql string, args ...any) (db.Result, err
 	if err != nil {
 		return db.Result{}, fmt.Errorf("postgres: tx query: %w", err)
 	}
-	return buildResult(rows), nil
+	return buildResult(rows, t.tm), nil
 }
 
 func (t *tx) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult, error) {

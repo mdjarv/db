@@ -58,9 +58,31 @@ type RowIterator interface {
 }
 
 type Column struct {
+    Name            string
+    TypeName        string
+    TypeOID         uint32
+    EnumValues      []string         // non-nil for enum types
+    CompositeFields []CompositeField // non-nil for composite types
+}
+
+type CompositeField struct {
     Name     string
     TypeName string
-    TypeOID  uint32
+}
+
+// Optional — implemented by postgres driver for `db introspect`
+type TypeIntrospector interface {
+    TypeDetail(oid uint32) TypeDetail
+}
+
+type TypeDetail struct {
+    OID             uint32
+    Name            string
+    IsArray         bool
+    ElemOID         uint32
+    ElemTypeName    string
+    EnumValues      []string
+    CompositeFields []CompositeField
 }
 ```
 
@@ -123,7 +145,7 @@ type Exporter interface {
 - **NORMAL**: hjkl cell cursor (row + column), Ctrl+hjkl pane switching, `y` yank cell, `Y` yank row
 - **INSERT**: text input in query editor, search filter, command bar
 - **COMMAND**: `:` prefix commands (`:w` run query, `:q` quit, `:set` config, `:theme`, `:commit`, `:rollback`)
-- **EDIT**: popup dialog for cell editing, Tab cycles OK/NULL/Cancel, Ctrl+J newline
+- **EDIT**: popup dialog with type-aware input modes (text, enum, array, composite); arrays support J/K reorder, enum arrays use enum picker per element; Tab cycles OK/[NULL]/Cancel (NULL hidden when not nullable)
 - **V-LINE**: `V` on results — row selection, Tab toggles row/column axis, `y` yanks CSV
 - **V-BLOCK**: `v` on results — rectangular selection via h/j/k/l, `y` yanks CSV
 

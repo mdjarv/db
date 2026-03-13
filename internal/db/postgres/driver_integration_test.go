@@ -40,6 +40,19 @@ INSERT INTO users (name, email, active) VALUES
 INSERT INTO posts (user_id, title, body) VALUES
 	(1, 'Hello World', 'First post'),
 	(2, 'Go Tips', 'Use interfaces');
+
+CREATE TYPE mood AS ENUM ('happy', 'sad', 'neutral');
+
+CREATE TABLE type_test (
+	id SERIAL PRIMARY KEY,
+	tags TEXT[],
+	scores INT[],
+	feeling mood,
+	metadata JSONB
+);
+
+INSERT INTO type_test (tags, scores, feeling, metadata) VALUES
+	('{go,tui}', '{10,20}', 'happy', '{"key":"val"}');
 `
 
 func setupPostgres(t *testing.T) (string, func()) {
@@ -402,6 +415,113 @@ func TestColumnTypes(t *testing.T) {
 		}
 		if col.TypeName != want {
 			t.Errorf("column %q: expected type %q, got %q", col.Name, want, col.TypeName)
+		}
+	}
+}
+
+func TestArrayAndEnumTypes(t *testing.T) {
+	dsn, cleanup := setupPostgres(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	conn, err := db.Open(ctx, "postgres", dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx) //nolint:errcheck
+
+	result, err := conn.Query(ctx, "SELECT tags, scores, feeling, metadata FROM type_test LIMIT 1")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer result.Rows.Close()
+
+	expected := map[string]string{
+		"tags":     "text[]",
+		"scores":   "int4[]",
+		"feeling":  "mood",
+		"metadata": "jsonb",
+	}
+
+	for _, col := range result.Columns {
+		want, ok := expected[col.Name]
+		if !ok {
+			t.Errorf("unexpected column %q", col.Name)
+			continue
+		}
+		if col.TypeName != want {
+			t.Errorf("column %q: expected type %q, got %q", col.Name, want, col.TypeName)
+		}
+	}
+
+	// Verify enum values are populated for feeling column
+	for _, col := range result.Columns {
+		if col.Name == "feeling" {
+			if len(col.EnumValues) != 3 {
+				t.Fatalf("expected 3 enum values for feeling, got %d: %v", len(col.EnumValues), col.EnumValues)
+			}
+			wantEnums := []string{"happy", "sad", "neutral"}
+			for i, v := range col.EnumValues {
+				if v != wantEnums[i] {
+					t.Errorf("enum value %d: expected %q, got %q", i, wantEnums[i], v)
+				}
+			}
+		}
+		if col.Name == "tags" && col.EnumValues != nil {
+			t.Errorf("expected nil enum values for array column, got %v", col.EnumValues)
+		}
+	}
+}
+
+func TestSchemaColumnsTypeNames(t *testing.T) {
+	dsn, cleanup := setupPostgres(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	conn, err := db.Open(ctx, "postgres", dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx) //nolint:errcheck
+
+	result, err := conn.Query(ctx, `
+SELECT
+	c.column_name,
+	CASE
+		WHEN c.data_type = 'ARRAY' THEN substring(c.udt_name from 2) || '[]'
+		WHEN c.data_type = 'USER-DEFINED' THEN c.udt_name
+		ELSE c.data_type
+	END AS data_type
+FROM information_schema.columns c
+WHERE c.table_schema = 'public' AND c.table_name = 'type_test'
+ORDER BY c.ordinal_position`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer result.Rows.Close()
+
+	expected := map[string]string{
+		"id":       "integer",
+		"tags":     "text[]",
+		"scores":   "int4[]",
+		"feeling":  "mood",
+		"metadata": "jsonb",
+	}
+
+	for result.Rows.Next() {
+		vals, err := result.Rows.Values()
+		if err != nil {
+			t.Fatalf("values: %v", err)
+		}
+		name := vals[0].(string)
+		typeName := vals[1].(string)
+		want, ok := expected[name]
+		if !ok {
+			t.Errorf("unexpected column %q", name)
+			continue
+		}
+		if typeName != want {
+			t.Errorf("column %q: expected type %q, got %q", name, want, typeName)
 		}
 	}
 }

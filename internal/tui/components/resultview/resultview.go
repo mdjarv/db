@@ -204,12 +204,16 @@ func (m *Model) startEdit() tea.Cmd {
 	}
 	colName := ""
 	typeName := ""
+	var enumValues []string
+	var compositeFields []core.CompositeField
 	if col < len(m.columns) {
 		colName = m.columns[col].Name
 		typeName = m.columns[col].TypeName
+		enumValues = m.columns[col].EnumValues
+		compositeFields = m.columns[col].CompositeFields
 	}
 	return func() tea.Msg {
-		return core.EditRequestMsg{Row: row, Col: col, ColName: colName, TypeName: typeName, Value: val}
+		return core.EditRequestMsg{Row: row, Col: col, ColName: colName, TypeName: typeName, Value: val, EnumValues: enumValues, CompositeFields: compositeFields}
 	}
 }
 

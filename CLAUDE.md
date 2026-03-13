@@ -24,3 +24,7 @@ make test-integration  # integration tests (requires docker)
 - `internal/config/` — viper config, XDG paths
 
 See [docs/architecture.md](docs/architecture.md) for interfaces and design rules.
+
+## Gotchas
+
+- When spawning agents to modify existing code (especially additive changes), review worktree diffs for unintended deletions — agents adding new fields/methods may remove existing ones they don't recognize (e.g., removing `EnumValues` while adding `CompositeFields`).

@@ -62,10 +62,18 @@ type QueryResultMsg struct {
 	Duration time.Duration
 }
 
-// ResultColumn describes a column in the result set.
-type ResultColumn struct {
+// CompositeField describes a field within a composite type.
+type CompositeField struct {
 	Name     string
 	TypeName string
+}
+
+// ResultColumn describes a column in the result set.
+type ResultColumn struct {
+	Name            string
+	TypeName        string
+	EnumValues      []string
+	CompositeFields []CompositeField
 }
 
 // QueryErrorMsg carries a query error.
@@ -81,11 +89,13 @@ type ExportRequestMsg struct {
 
 // EditRequestMsg requests opening the edit dialog for a cell.
 type EditRequestMsg struct {
-	Row      int
-	Col      int
-	ColName  string
-	TypeName string
-	Value    string
+	Row             int
+	Col             int
+	ColName         string
+	TypeName        string
+	Value           string
+	EnumValues      []string
+	CompositeFields []CompositeField
 }
 
 // DeleteRowMsg requests deletion of the current row.
