@@ -8,42 +8,42 @@ Introspect PostgreSQL schema: tables, columns, indexes, constraints, foreign key
 
 ### Types (`internal/schema/types.go`)
 
-- [ ] `Table`: name, schema, type (table/view/materialized view), row estimate, size
-- [ ] `ColumnInfo`: name, type, nullable, default, is_pk, position
-- [ ] `Index`: name, columns, unique, type (btree/hash/gin/gist), size
-- [ ] `Constraint`: name, type (PK/FK/UNIQUE/CHECK/EXCLUDE), columns, definition
-- [ ] `ForeignKey`: name, columns, referenced table, referenced columns, on_delete, on_update
+- [x] `Table`: name, schema, type (table/view/materialized view), row estimate, size
+- [x] `ColumnInfo`: name, type, nullable, default, is_pk, position
+- [x] `Index`: name, columns, unique, type (btree/hash/gin/gist), size
+- [x] `Constraint`: name, type (PK/FK/UNIQUE/CHECK/EXCLUDE), columns, definition
+- [x] `ForeignKey`: name, columns, referenced table, referenced columns, on_delete, on_update
 
 ### Inspector Interface (`internal/schema/inspector.go`)
 
-- [ ] `Inspector` interface (see architecture.md)
-- [ ] Accept schema filter (default `public`)
+- [x] `Inspector` interface (see architecture.md)
+- [x] Accept schema filter (default `public`)
 
 ### PostgreSQL Implementation (`internal/schema/postgres.go`)
 
-- [ ] `Tables()` — query `information_schema.tables` + `pg_stat_user_tables` for row estimates
-- [ ] `Columns()` — query `information_schema.columns` + `pg_constraint` for PK detection
-- [ ] `Indexes()` — query `pg_indexes` + `pg_stat_user_indexes` for size
-- [ ] `Constraints()` — query `pg_constraint` with type classification
-- [ ] `ForeignKeys()` — query `pg_constraint` + resolve referenced table/columns
+- [x] `Tables()` — query `information_schema.tables` + `pg_stat_user_tables` for row estimates
+- [x] `Columns()` — query `information_schema.columns` + `pg_constraint` for PK detection
+- [x] `Indexes()` — query `pg_indexes` + `pg_stat_user_indexes` for size
+- [x] `Constraints()` — query `pg_constraint` with type classification
+- [x] `ForeignKeys()` — query `pg_constraint` + resolve referenced table/columns
 - [ ] Schema listing: `Schemas(ctx) ([]string, error)`
-- [ ] View detection: distinguish tables, views, materialized views
+- [x] View detection: distinguish tables, views, materialized views
 
 ### CLI Commands
 
-- [ ] `db tables` — list tables with row count and size
-- [ ] `db tables --schema <name>` — filter by schema
-- [ ] `db describe <table>` — show columns, indexes, constraints, FKs
+- [x] `db tables` — list tables with row count and size
+- [x] `db tables --schema <name>` — filter by schema
+- [x] `db describe <table>` — show columns, indexes, constraints, FKs
 - [ ] `db describe <table> --format json` — machine-readable output
-- [ ] Pretty table output with alignment
+- [x] Pretty table output with alignment
 
 ### Tests
 
-- [ ] Integration: create schema with tables, views, indexes, FKs, constraints
-- [ ] Integration: verify Tables() returns correct list
-- [ ] Integration: verify Columns() returns correct types, nullability, defaults
-- [ ] Integration: verify Indexes() includes all index types
-- [ ] Integration: verify ForeignKeys() resolves references correctly
+- [x] Integration: create schema with tables, views, indexes, FKs, constraints
+- [x] Integration: verify Tables() returns correct list
+- [x] Integration: verify Columns() returns correct types, nullability, defaults
+- [x] Integration: verify Indexes() includes all index types
+- [x] Integration: verify ForeignKeys() resolves references correctly
 - [ ] Integration: CLI `db tables` and `db describe` end-to-end
 
 ## Test Schema

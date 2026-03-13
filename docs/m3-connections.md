@@ -8,40 +8,40 @@ Saved connections with keyring-backed credentials, config file, and CLI commands
 
 ### Config Types (`internal/conn/config.go`)
 
-- [ ] `ConnectionConfig`: name, host, port, user, dbname, sslmode, options
-- [ ] Password stored separately in keyring, not config file
-- [ ] DSN builder from config fields
-- [ ] DSN parser to extract fields
+- [x] `ConnectionConfig`: name, host, port, user, dbname, sslmode, options
+- [x] Password stored separately in keyring, not config file
+- [x] DSN builder from config fields
+- [x] DSN parser to extract fields
 
 ### Config Store (`internal/conn/store.go`)
 
-- [ ] Load/save connections from `~/.config/db/connections.yaml`
-- [ ] CRUD operations: Add, Get, List, Remove
-- [ ] Default connection setting
-- [ ] XDG path resolution (`internal/config/paths.go`)
-- [ ] Unit tests with temp config files
+- [x] Load/save connections from `~/.config/db/connections.yaml`
+- [x] CRUD operations: Add, Get, List, Remove
+- [x] Default connection setting
+- [x] XDG path resolution (`internal/config/paths.go`)
+- [x] Unit tests with temp config files
 
 ### Keyring Integration (`internal/conn/keyring.go`)
 
-- [ ] Store password: `SetPassword(connectionName, password)`
-- [ ] Retrieve password: `GetPassword(connectionName)`
-- [ ] Delete password: `DeletePassword(connectionName)`
-- [ ] Keyring interface for testability (mock in tests)
+- [x] Store password: `SetPassword(connectionName, password)`
+- [x] Retrieve password: `GetPassword(connectionName)`
+- [x] Delete password: `DeletePassword(connectionName)`
+- [x] Keyring interface for testability (mock in tests)
 - [ ] Fallback behavior when keyring unavailable (prompt every time)
 
 ### Connection Resolver (`internal/conn/resolve.go`)
 
-- [ ] Resolution order: CLI flags > env vars > named connection from config
-- [ ] `Resolve(flags, envPrefix) -> ConnectionConfig`
-- [ ] Env vars: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_DSN`
+- [x] Resolution order: CLI flags > env vars > named connection from config
+- [x] `Resolve(flags, envPrefix) -> ConnectionConfig`
+- [x] Env vars: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_DSN`
 - [ ] If password missing from all sources: prompt (CLI) or dialog (TUI)
 
 ### CLI Commands
 
-- [ ] `db connect add` — interactive: prompt for host, port, user, password, dbname, name
-- [ ] `db connect list` — table of saved connections (password masked)
-- [ ] `db connect remove <name>` — remove from config + keyring
-- [ ] `db ping` — resolve connection, attempt connect, report success/failure with timing
+- [x] `db connect add` — interactive: prompt for host, port, user, password, dbname, name
+- [x] `db connect list` — table of saved connections (password masked)
+- [x] `db connect remove <name>` — remove from config + keyring
+- [x] `db ping` — resolve connection, attempt connect, report success/failure with timing
 
 ### TUI Connection Dialog (`internal/tui/components/dialog/`)
 

@@ -8,13 +8,13 @@ Query execution engine with transaction management. CLI `db query` command for o
 
 ### Executor (`internal/query/executor.go`)
 
-- [ ] `Executor` struct: wraps `db.Conn`, manages transaction state
-- [ ] `Execute(ctx, sql) -> (*db.Result, error)` — auto-detect SELECT vs DML
+- [x] `Executor` struct: wraps `db.Conn`, manages transaction state
+- [x] `Execute(ctx, sql) -> (*ExecResult, error)` — auto-detect SELECT vs DML
 - [ ] `ExecDML(ctx, sql) -> (*db.ExecResult, error)` — explicit DML execution
-- [ ] Transaction mode: auto-commit vs explicit
-- [ ] `Begin()`, `Commit()`, `Rollback()` — delegate to `db.Tx`
-- [ ] Query cancellation via context (Ctrl-C in TUI sends cancel)
-- [ ] Query timing: measure and return execution duration
+- [x] Transaction mode: auto-commit vs explicit
+- [x] `Begin()`, `Commit()`, `Rollback()` — delegate to `db.Tx`
+- [x] Query cancellation via context (Ctrl-C in TUI sends cancel)
+- [x] Query timing: measure and return execution duration
 - [ ] Error classification: syntax error, connection lost, permission denied, timeout
 
 ### SQL Autocomplete (`internal/query/completer.go`)
@@ -29,23 +29,23 @@ Query execution engine with transaction management. CLI `db query` command for o
 
 ### CLI Command (`cmd/query.go`)
 
-- [ ] `db query "SELECT * FROM users LIMIT 10"`
-- [ ] `--format` flag: `table` (default), `csv`, `json`, `sql`
-- [ ] `--no-header` flag: omit column headers
-- [ ] Stdin support: `echo "SELECT 1" | db query`
-- [ ] File support: `db query -f queries/report.sql`
-- [ ] Connection flags inherited from root command
-- [ ] Pretty table output by default (aligned columns, borders)
+- [x] `db query "SELECT * FROM users LIMIT 10"`
+- [x] `--format` flag: `table` (default), `csv`, `json`, `sql`
+- [x] `--no-header` flag: omit column headers
+- [x] Stdin support: `echo "SELECT 1" | db query`
+- [x] File support: `db query -f queries/report.sql`
+- [x] Connection flags inherited from root command
+- [x] Pretty table output by default (aligned columns, borders)
 - [ ] Exit code: 0 success, 1 query error, 2 connection error
 
 ### Tests
 
-- [ ] Integration: execute SELECT, INSERT, UPDATE, DELETE
-- [ ] Integration: transaction begin/commit/rollback
-- [ ] Integration: query cancellation
+- [x] Integration: execute SELECT, INSERT, UPDATE, DELETE
+- [x] Integration: transaction begin/commit/rollback
+- [x] Integration: query cancellation
 - [ ] Unit: autocomplete keyword matching
 - [ ] Unit: autocomplete table/column matching
-- [ ] Unit: SQL type detection (SELECT vs DML)
+- [x] Unit: SQL type detection (SELECT vs DML)
 - [ ] Integration: CLI `db query` end-to-end with testcontainers
 
 ## Design Notes
