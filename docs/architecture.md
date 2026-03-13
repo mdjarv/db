@@ -114,7 +114,7 @@ type Exporter interface {
                     └───────┘
 ```
 
-- **NORMAL**: hjkl cell cursor (row + column), Ctrl+hjkl pane switching, scrolling
+- **NORMAL**: hjkl cell cursor (row + column), Ctrl+hjkl pane switching, `y` yank cell, `Y` yank row
 - **INSERT**: text input in query editor, search filter, command bar
 - **COMMAND**: `:` prefix commands (`:w` run query, `:q` quit, `:set` config, `:theme`)
 - **V-LINE**: `V` on results — row selection, Tab toggles row/column axis, `y` yanks CSV

@@ -224,6 +224,19 @@ func (m *Model) BlockColRange() (int, int) {
 
 // Yank
 
+// YankCell returns the current cell value.
+func (m *Model) YankCell() string {
+	if m.CursorRow < len(m.Rows) && m.CursorCol < len(m.Rows[m.CursorRow]) {
+		return m.Rows[m.CursorRow][m.CursorCol]
+	}
+	return ""
+}
+
+// YankRow returns the current row as CSV.
+func (m *Model) YankRow(sep string) string {
+	return m.formatRange(m.CursorRow, m.CursorRow, 0, len(m.Columns)-1, sep)
+}
+
 // YankSelection returns the selected data as CSV.
 func (m *Model) YankSelection(sep string) string {
 	switch m.Visual {
@@ -279,7 +292,7 @@ var (
 	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
 	selectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("208"))
 	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	rowBoldStyle   = lipgloss.NewStyle().Bold(true)
+	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 )
 
 // View renders the table.
@@ -366,7 +379,7 @@ func (m *Model) styleCell(text string, row, col int, focused bool) string {
 			return cursorStyle.Render(text)
 		}
 		if focused && row == m.CursorRow {
-			return rowBoldStyle.Render(text)
+			return cursorRowStyle.Render(text)
 		}
 		return text
 	}

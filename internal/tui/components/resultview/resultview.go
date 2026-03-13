@@ -66,12 +66,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case table.VisualBlock:
 		return m.updateVisualBlock(km)
 	default:
-		m.updateNormal(km)
-		return nil
+		return m.updateNormal(km)
 	}
 }
 
-func (m *Model) updateNormal(km tea.KeyMsg) {
+func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 	switch km.String() {
 	case "j", "down":
 		m.table.MoveDown()
@@ -85,7 +84,14 @@ func (m *Model) updateNormal(km tea.KeyMsg) {
 		m.table.GotoTop()
 	case "G":
 		m.table.GotoBottom()
+	case "y":
+		content := m.table.YankCell()
+		return func() tea.Msg { return core.YankMsg{Content: content} }
+	case "Y":
+		content := m.table.YankRow(m.separator)
+		return func() tea.Msg { return core.YankMsg{Content: content} }
 	}
+	return nil
 }
 
 func (m *Model) updateVisualLine(km tea.KeyMsg) tea.Cmd {

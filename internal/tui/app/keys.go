@@ -95,7 +95,9 @@ func HelpText() string {
 	sb.WriteString("\nPanes:\n")
 	sb.WriteString("  j/k   - navigate items\n")
 	sb.WriteString("  g/G   - top/bottom\n")
-	sb.WriteString("  h/l   - left/right (editor)\n")
+	sb.WriteString("  h/l   - left/right (editor/results)\n")
+	sb.WriteString("  y     - yank cell (results)\n")
+	sb.WriteString("  Y     - yank row (results)\n")
 
 	sb.WriteString("\nVisual (results):\n")
 	sb.WriteString("  V     - visual line (rows)\n")
