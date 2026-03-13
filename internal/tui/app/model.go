@@ -30,12 +30,11 @@ type Model struct {
 	statusBar   *statusbar.Model
 	commandBar  *commandbar.Model
 
-	width      int
-	height     int
-	leftRatio  float64
-	awaitCtrlW bool
-	showHelp   bool
-	ready      bool
+	width     int
+	height    int
+	leftRatio float64
+	showHelp  bool
+	ready     bool
 }
 
 // New creates the app model with all sub-components.
@@ -95,17 +94,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.showHelp {
 			m.showHelp = false
-			return m, nil
-		}
-
-		if m.awaitCtrlW {
-			m.awaitCtrlW = false
-			action := MatchCtrlW(msg)
-			return m.handleAction(action)
-		}
-
-		if msg.Type == tea.KeyCtrlW && m.mode == core.ModeNormal {
-			m.awaitCtrlW = true
 			return m, nil
 		}
 
@@ -198,7 +186,7 @@ func (m *Model) recalcLayout() {
 	leftW := max(int(float64(m.width)*m.leftRatio), minPaneWidth)
 	rightW := max(m.width-leftW, minPaneWidth)
 
-	topH := max(contentHeight/3, minPaneHeight)
+	topH := max(contentHeight/4, minPaneHeight)
 	bottomH := max(contentHeight-topH, minPaneHeight)
 
 	m.tableList.SetSize(leftW, contentHeight)

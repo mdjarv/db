@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,8 +19,14 @@ func keyMsg(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyShiftTab}
 	case "ctrl+c":
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
-	case "ctrl+w":
-		return tea.KeyMsg{Type: tea.KeyCtrlW}
+	case "ctrl+h":
+		return tea.KeyMsg{Type: tea.KeyCtrlH}
+	case "ctrl+j":
+		return tea.KeyMsg{Type: tea.KeyCtrlJ}
+	case "ctrl+k":
+		return tea.KeyMsg{Type: tea.KeyCtrlK}
+	case "ctrl+l":
+		return tea.KeyMsg{Type: tea.KeyCtrlL}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -33,11 +40,17 @@ func TestMatchGlobal_NormalMode(t *testing.T) {
 		{"i", ActionModeInsert},
 		{":", ActionModeCommand},
 		{"?", ActionHelp},
+		{"ctrl+h", ActionFocusLeft},
+		{"ctrl+j", ActionFocusDown},
+		{"ctrl+k", ActionFocusUp},
+		{"ctrl+l", ActionFocusRight},
 		{"tab", ActionFocusNext},
 		{"shift+tab", ActionFocusPrev},
 		{"1", ActionFocusPane1},
 		{"2", ActionFocusPane2},
 		{"3", ActionFocusPane3},
+		{"+", ActionResizeGrow},
+		{"-", ActionResizeShrink},
 	}
 	for _, tt := range tests {
 		got := MatchGlobal(keyMsg(tt.key), core.ModeNormal)
@@ -48,43 +61,25 @@ func TestMatchGlobal_NormalMode(t *testing.T) {
 }
 
 func TestMatchGlobal_InsertMode(t *testing.T) {
-	// i should not trigger insert mode when already in insert
 	got := MatchGlobal(keyMsg("i"), core.ModeInsert)
 	if got != ActionNone {
 		t.Errorf("MatchGlobal(i, Insert) = %d, want ActionNone", got)
 	}
 
-	// esc works in any mode
 	got = MatchGlobal(keyMsg("esc"), core.ModeInsert)
 	if got != ActionModeNormal {
 		t.Errorf("MatchGlobal(esc, Insert) = %d, want ActionModeNormal", got)
 	}
 
-	// ctrl+c works in any mode
 	got = MatchGlobal(keyMsg("ctrl+c"), core.ModeInsert)
 	if got != ActionQuit {
 		t.Errorf("MatchGlobal(ctrl+c, Insert) = %d, want ActionQuit", got)
 	}
-}
 
-func TestMatchCtrlW(t *testing.T) {
-	tests := []struct {
-		key  string
-		want Action
-	}{
-		{"h", ActionFocusLeft},
-		{"j", ActionFocusDown},
-		{"k", ActionFocusUp},
-		{"l", ActionFocusRight},
-		{"+", ActionResizeGrow},
-		{"-", ActionResizeShrink},
-		{"x", ActionNone},
-	}
-	for _, tt := range tests {
-		got := MatchCtrlW(keyMsg(tt.key))
-		if got != tt.want {
-			t.Errorf("MatchCtrlW(%q) = %d, want %d", tt.key, got, tt.want)
-		}
+	// ctrl+hjkl should not work in insert mode
+	got = MatchGlobal(keyMsg("ctrl+h"), core.ModeInsert)
+	if got != ActionNone {
+		t.Errorf("MatchGlobal(ctrl+h, Insert) = %d, want ActionNone", got)
 	}
 }
 
@@ -93,23 +88,9 @@ func TestHelpText(t *testing.T) {
 	if text == "" {
 		t.Error("HelpText() returned empty string")
 	}
-	// Should contain key sections
-	for _, want := range []string{"Global:", "Ctrl-w prefix:", "Panes:", "Commands:"} {
-		if !contains(text, want) {
+	for _, want := range []string{"Navigation:", "Modes:", "Panes:", "Commands:"} {
+		if !strings.Contains(text, want) {
 			t.Errorf("HelpText() missing section %q", want)
 		}
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && stringContains(s, substr)
-}
-
-func stringContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
