@@ -16,8 +16,8 @@ Saved connections with keyring-backed credentials, config file, and CLI commands
 ### Config Store (`internal/conn/store.go`)
 
 - [x] Load/save connections from `~/.config/db/connections.yaml`
-- [x] CRUD operations: Add, Get, List, Remove
-- [x] Default connection setting
+- [x] CRUD operations: Add, Get, List, Remove, Rename
+- [x] Default connection setting (SetDefault, DefaultName)
 - [x] XDG path resolution (`internal/config/paths.go`)
 - [x] Unit tests with temp config files
 
@@ -41,6 +41,9 @@ Saved connections with keyring-backed credentials, config file, and CLI commands
 - [x] `db connect add` — interactive: prompt for host, port, user, password, dbname, name
 - [x] `db connect list` — table of saved connections (password masked)
 - [x] `db connect remove <name>` — remove from config + keyring
+- [x] `db connect default <name>` — set default connection
+- [x] `db connect rename <old> <new>` — rename connection (moves keyring credential + updates default)
+- [x] `db connect edit <name>` — interactive edit with pre-filled current values
 - [x] `db ping` — resolve connection, attempt connect, report success/failure with timing
 
 ### TUI Connection Dialog (`internal/tui/components/dialog/`)
@@ -73,6 +76,9 @@ connections:
 - `db connect add` saves connection to config + password to keyring
 - `db connect list` shows saved connections
 - `db connect remove` cleans up config + keyring
+- `db connect default myapp` sets default connection
+- `db connect rename old new` renames connection
+- `db connect edit myapp` edits connection interactively
 - `db ping` connects and reports latency
 - `db ping --connection myapp` uses saved connection
 - `db ping --dsn "postgres://..."` uses one-off DSN

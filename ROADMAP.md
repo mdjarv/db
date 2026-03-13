@@ -197,13 +197,18 @@ db ping                     # test connection
 db connect add              # add/save a connection
 db connect list             # list saved connections
 db connect remove <name>    # remove saved connection
+db connect default <name>   # set default connection
+db connect rename <old> <new> # rename saved connection
+db connect edit <name>      # edit saved connection interactively
 db query "SELECT ..."       # one-shot query, results to stdout
-db query -f csv "SELECT ..." # query with format
+db query -f file.sql        # execute SQL from file
+db query --format csv "..." # query with format (csv, json, sql, table)
 db tables                   # list tables
+db tables --schema <name>   # list tables in schema
 db describe <table>         # show table schema
 ```
 
-Global flags: `--connection <name>`, `--dsn <url>`, `--host`, `--port`, `--user`, `--dbname`
+Global flags: `--connection <name>`, `--dsn <url>`, `--host`, `--port`, `--user`, `--password`, `--dbname`, `--sslmode`
 
 ## TUI Layout
 
