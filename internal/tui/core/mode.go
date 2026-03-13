@@ -9,6 +9,7 @@ const (
 	ModeNormal Mode = iota
 	ModeInsert
 	ModeCommand
+	ModeVisual
 )
 
 // String returns the display name of the mode.
@@ -18,6 +19,8 @@ func (m Mode) String() string {
 		return "INSERT"
 	case ModeCommand:
 		return "COMMAND"
+	case ModeVisual:
+		return "VISUAL"
 	default:
 		return "NORMAL"
 	}
@@ -31,3 +34,6 @@ func (m Mode) IsCommand() bool { return m == ModeCommand }
 
 // IsNormal returns true if mode is Normal.
 func (m Mode) IsNormal() bool { return m == ModeNormal }
+
+// IsVisual returns true if mode is Visual.
+func (m Mode) IsVisual() bool { return m == ModeVisual }

@@ -30,6 +30,7 @@ const (
 	ActionHelp
 	ActionResizeGrow
 	ActionResizeShrink
+	ActionModeVisual
 )
 
 // Binding maps a key to an action in a specific mode.
@@ -57,6 +58,8 @@ var globalBindings = []Binding{
 	{Action: ActionFocusPane3, Key: "3", Desc: "pane 3", Mode: core.ModeNormal},
 	{Action: ActionResizeGrow, Key: "+", Desc: "grow pane", Mode: core.ModeNormal},
 	{Action: ActionResizeShrink, Key: "-", Desc: "shrink pane", Mode: core.ModeNormal},
+	{Action: ActionModeVisual, Key: "V", Desc: "visual line mode", Mode: core.ModeNormal},
+	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisual},
 }
 
 // MatchGlobal returns the action matching a key in the given mode.
@@ -90,6 +93,13 @@ func HelpText() string {
 	sb.WriteString("  j/k   - navigate items\n")
 	sb.WriteString("  g/G   - top/bottom\n")
 	sb.WriteString("  h/l   - left/right (editor)\n")
+
+	sb.WriteString("\nVisual (results):\n")
+	sb.WriteString("  V     - visual line mode\n")
+	sb.WriteString("  j/k   - extend row selection\n")
+	sb.WriteString("  h/l   - select column\n")
+	sb.WriteString("  y     - yank selection (CSV)\n")
+	sb.WriteString("  esc   - cancel\n")
 
 	sb.WriteString("\nCommands:\n")
 	sb.WriteString("  :q    - quit\n")

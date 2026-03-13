@@ -14,3 +14,8 @@ type StatusMsg struct {
 type QuerySubmittedMsg struct {
 	SQL string
 }
+
+// YankMsg carries content to copy to clipboard.
+type YankMsg struct {
+	Content string
+}

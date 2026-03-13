@@ -7,6 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
+
+	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/pane"
 )
 
 func newTestModel(t *testing.T) *teatest.TestModel {
@@ -110,5 +113,43 @@ func TestApp_ViewRenders(t *testing.T) {
 
 	if !strings.Contains(output, "NORMAL") {
 		t.Error("output should contain mode indicator")
+	}
+}
+
+func TestApp_VisualMode(t *testing.T) {
+	tm := newTestModel(t)
+
+	// focus result view first (tab twice: TableList -> QueryEditor -> ResultView)
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+
+	// V to enter visual mode
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("V")})
+
+	// esc to cancel
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m := finalModel(t, tm)
+
+	if m.mode != core.ModeNormal {
+		t.Errorf("mode after visual cancel = %s, want NORMAL", m.mode)
+	}
+}
+
+func TestApp_VisualModeOnlyOnResultView(t *testing.T) {
+	tm := newTestModel(t)
+
+	// V on TableList should not enter visual mode
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("V")})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m := finalModel(t, tm)
+
+	if m.mode != core.ModeNormal {
+		t.Errorf("V on TableList should stay NORMAL, got %s", m.mode)
+	}
+	if m.panes.ActiveID() != pane.TableList {
+		t.Error("should still be on TableList")
 	}
 }

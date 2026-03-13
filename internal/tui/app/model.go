@@ -2,6 +2,9 @@
 package app
 
 import (
+	"os/exec"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -86,6 +89,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetMode(m.mode)
 		return m, nil
 
+	case core.YankMsg:
+		m.mode = core.ModeNormal
+		m.statusBar.SetMode(m.mode)
+		return m, copyToClipboard(msg.Content)
+
+	case yankResultMsg:
+		if msg.err != nil {
+			m.statusBar.SetMessage("yank failed: " + msg.err.Error())
+		} else {
+			m.statusBar.SetMessage("yanked to clipboard")
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.commandBar.Active() {
 			cmd := m.commandBar.Update(msg)
@@ -95,6 +111,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
+		}
+
+		if m.mode == core.ModeVisual {
+			if msg.String() == "esc" {
+				m.resultView.ExitVisual()
+				m.mode = core.ModeNormal
+				m.statusBar.SetMode(m.mode)
+				return m, nil
+			}
+			cmd := m.resultView.Update(msg)
+			return m, cmd
 		}
 
 		action := MatchGlobal(msg, m.mode)
@@ -155,8 +182,26 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 	case ActionResizeShrink:
 		m.leftRatio = max(m.leftRatio-0.05, 0.1)
 		m.recalcLayout()
+	case ActionModeVisual:
+		if m.panes.ActiveID() == pane.ResultView {
+			m.mode = core.ModeVisual
+			m.statusBar.SetMode(m.mode)
+			m.resultView.EnterVisual()
+		}
 	}
 	return m, nil
+}
+
+type yankResultMsg struct {
+	err error
+}
+
+func copyToClipboard(content string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("wl-copy", "--")
+		cmd.Stdin = strings.NewReader(content)
+		return yankResultMsg{err: cmd.Run()}
+	}
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
