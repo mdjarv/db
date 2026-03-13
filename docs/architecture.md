@@ -112,18 +112,19 @@ type Exporter interface {
       Esc/Enter └──────────┘
 ```
 
-- **NORMAL**: hjkl navigation, pane switching (Ctrl-w + hjkl), scrolling, selection
+- **NORMAL**: hjkl navigation, pane switching (Ctrl+hjkl), scrolling, selection
 - **INSERT**: text input in query editor, search filter, command bar
 - **COMMAND**: `:` prefix commands (`:w` run query, `:q` quit, `:set` config, `:theme`)
 
 ## Pane Focus
 
 ```
-Ctrl-w h/l    → move focus left/right
-Ctrl-w j/k    → move focus up/down (within right panes)
+Ctrl+h/l      → move focus left/right
+Ctrl+j/k      → move focus up/down (within right panes)
 Tab           → cycle focus forward
 Shift-Tab     → cycle focus backward
 1/2/3         → jump to pane by number (in normal mode)
++/-           → grow/shrink left pane (in normal mode)
 ```
 
 ## Testing Strategy
