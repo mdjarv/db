@@ -103,20 +103,27 @@ type Exporter interface {
         Esc      │          │    i, a, o, I, A, O
     ┌───────────>│  NORMAL  │──────────────────────┐
     │            │  h/l col │                       │
-    │            └┬───┬───┬─┘                       v
-    │             │:  │V  │v (on results)      ┌──────────┐
-    │             v   v   v                    │  INSERT  │
-    │     ┌────────┐┌───────┐┌────────┐        │          │
+    │            └┬───┬───┬┬┘                       v
+    │             │:  │V  ││v (on results)     ┌──────────┐
+    │             v   v   │v                   │  INSERT  │
+    │     ┌────────┐┌─────┴─┐┌────────┐        │          │
     │     │COMMAND ││V-LINE ││V-BLOCK │        └──────────┘
     └─────│        ││j/k row││h/j/k/l │
  Esc/Enter└────────┘│Tab col││y yank  │
-    └───────────────│y yank │└────────┘
-                    └───────┘
+    │     └────────││y yank │└────────┘
+    │     │        │└───────┘
+    │     │ Enter/e│ (on results)
+    │     v        │
+    │  ┌────────┐  │
+    └──│  EDIT  │──┘
+ Esc   │ dialog │
+       └────────┘
 ```
 
 - **NORMAL**: hjkl cell cursor (row + column), Ctrl+hjkl pane switching, `y` yank cell, `Y` yank row
 - **INSERT**: text input in query editor, search filter, command bar
-- **COMMAND**: `:` prefix commands (`:w` run query, `:q` quit, `:set` config, `:theme`)
+- **COMMAND**: `:` prefix commands (`:w` run query, `:q` quit, `:set` config, `:theme`, `:commit`, `:rollback`)
+- **EDIT**: popup dialog for cell editing, Tab cycles OK/NULL/Cancel, Ctrl+J newline
 - **V-LINE**: `V` on results — row selection, Tab toggles row/column axis, `y` yanks CSV
 - **V-BLOCK**: `v` on results — rectangular selection via h/j/k/l, `y` yanks CSV
 

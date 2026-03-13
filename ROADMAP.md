@@ -68,8 +68,8 @@ internal/
 
   editor/               # data editing
     buffer.go           # pending edit buffer (INSERT/UPDATE/DELETE)
-    changeset.go        # changeset types
-    applier.go          # apply changeset to DB (with transaction control)
+    dml.go              # DML generation (parameterized SQL)
+    applier.go          # apply changes to DB (with transaction control)
 
   tui/                  # TUI layer
     app/                # main app model, layout, focus management

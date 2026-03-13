@@ -17,6 +17,7 @@ import (
 	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
+	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/queryeditor"
 	"github.com/mdjarv/db/internal/tui/components/resultview"
 	"github.com/mdjarv/db/internal/tui/components/statusbar"
@@ -43,6 +44,7 @@ type Model struct {
 	statusBar   *statusbar.Model
 	commandBar  *commandbar.Model
 	dialog      *dialog.Model
+	editDialog  *editdialog.Model
 	buffers     *BufferManager
 	conn        db.Conn
 	inspector   schema.Inspector
@@ -87,6 +89,7 @@ func New() Model {
 		statusBar:   statusbar.New(),
 		commandBar:  commandbar.New(),
 		dialog:      dialog.New(),
+		editDialog:  editdialog.New(),
 		buffers:     bm,
 		changeBuf:   editor.NewChangeBuffer(),
 		leftRatio:   defaultLeftRatio,
@@ -228,11 +231,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case core.EditCellMsg:
-		result, cmd := m.handleEditCell(msg)
-		return result, cmd
+	case core.EditRequestMsg:
+		return m.handleEditRequest(msg)
 
-	case core.EditCancelMsg:
+	case editdialog.SubmitMsg:
+		return m.handleEditSubmit(msg)
+
+	case editdialog.CancelMsg:
 		result, cmd := m.handleEditCancel()
 		return result, cmd
 
@@ -285,9 +290,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// forward keys to resultview when in edit mode
-		if m.mode.IsEdit() {
-			cmd := m.resultView.Update(msg)
+		if m.editDialog.IsActive() {
+			cmd := m.editDialog.Update(msg)
 			return m, cmd
 		}
 
@@ -711,6 +715,13 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		return m.helpView()
+	}
+
+	if m.dialog.IsActive() {
+		return m.dialog.View(m.width, m.height)
+	}
+	if m.editDialog.IsActive() {
+		return m.editDialog.View(m.width, m.height)
 	}
 
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,

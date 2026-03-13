@@ -9,6 +9,7 @@ import (
 
 	"github.com/mdjarv/db/internal/editor"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
+	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/table"
 	"github.com/mdjarv/db/internal/tui/core"
 )
@@ -45,34 +46,61 @@ func (m *Model) columnName(col int) string {
 	return ""
 }
 
-// handleEditCell processes a confirmed cell edit.
-func (m *Model) handleEditCell(msg core.EditCellMsg) (Model, tea.Cmd) {
-	m.mode = core.ModeNormal
-	m.statusBar.SetMode(m.mode)
-
+// handleEditRequest opens the edit dialog for a cell.
+func (m *Model) handleEditRequest(msg core.EditRequestMsg) (Model, tea.Cmd) {
 	if !m.editingEnabled() {
 		m.statusBar.SetMessage("editing disabled: no primary key")
 		return *m, nil
 	}
+	m.mode = core.ModeEdit
+	m.statusBar.SetMode(m.mode)
+	nullable := m.columnNullable(msg.ColName)
+	m.editDialog.Open(msg.Row, msg.Col, msg.ColName, msg.TypeName, msg.Value, nullable)
+	return *m, nil
+}
+
+// columnNullable returns whether the named column allows NULL.
+func (m *Model) columnNullable(name string) bool {
+	for _, c := range m.editCols {
+		if c.Name == name {
+			return c.Nullable
+		}
+	}
+	return false
+}
+
+// handleEditSubmit processes a confirmed cell edit from the dialog.
+func (m *Model) handleEditSubmit(msg editdialog.SubmitMsg) (Model, tea.Cmd) {
+	m.mode = core.ModeNormal
+	m.statusBar.SetMode(m.mode)
+
+	newVal := msg.NewValue
+	if msg.IsNull {
+		newVal = table.NullPlaceholder
+	}
+	oldVal := msg.OldValue
+	if oldVal == "" {
+		oldVal = table.NullPlaceholder
+	}
 
 	// skip if value unchanged
-	if msg.OldValue == msg.NewValue {
+	if oldVal == newVal {
 		return *m, nil
 	}
 
 	pk := m.rowPK(msg.Row)
 	colName := m.columnName(msg.Col)
 
-	var oldVal, newVal any
-	if msg.OldValue == table.NullPlaceholder {
-		oldVal = nil
+	var oldAny, newAny any
+	if oldVal == table.NullPlaceholder {
+		oldAny = nil
 	} else {
-		oldVal = msg.OldValue
+		oldAny = oldVal
 	}
-	if msg.NewValue == table.NullPlaceholder {
-		newVal = nil
+	if newVal == table.NullPlaceholder {
+		newAny = nil
 	} else {
-		newVal = msg.NewValue
+		newAny = newVal
 	}
 
 	m.changeBuf.Add(editor.Change{
@@ -81,9 +109,14 @@ func (m *Model) handleEditCell(msg core.EditCellMsg) (Model, tea.Cmd) {
 		Schema:   m.editSchema,
 		PK:       pk,
 		Column:   colName,
-		OldValue: oldVal,
-		NewValue: newVal,
+		OldValue: oldAny,
+		NewValue: newAny,
 	})
+
+	// update display value in result view
+	if msg.Row < len(m.resultView.TableRows()) && msg.Col < len(m.resultView.TableRows()[msg.Row]) {
+		m.resultView.TableRows()[msg.Row][msg.Col] = newVal
+	}
 
 	m.resultView.MarkModified(msg.Row, msg.Col)
 	m.updatePendingStatus()

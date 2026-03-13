@@ -8,38 +8,38 @@ Built-in theme engine with shipped themes. Selectable via config or `:theme` com
 
 ### Theme Type (`internal/tui/theme/theme.go`)
 
-- [ ] `Theme` struct: name + color palette
-- [ ] Color palette groups:
+- [x] `Theme` struct: name + color palette
+- [x] Color palette groups:
   - `Chrome`: borders, pane backgrounds, status bar, mode indicator
   - `Syntax`: SQL keywords, strings, numbers, comments, operators
   - `Data`: NULL, boolean, number, string, date cell colors
   - `UI`: cursor, selection, focused border, unfocused border, error, warning, success
-- [ ] Colors as lipgloss `AdaptiveColor` or hex strings
-- [ ] `Apply(theme)` — set all lipgloss styles from theme
+- [x] Colors as lipgloss hex strings
+- [x] `ComputeStyles(colors)` — derive all lipgloss styles from theme colors
 
 ### Built-in Themes (`internal/tui/theme/builtin.go`)
 
-- [ ] **Default Dark** — dark background, muted blues and greens
-- [ ] **Default Light** — light background, darker tones
-- [ ] **Solarized Dark** — classic solarized
-- [ ] **Solarized Light** — classic solarized light
-- [ ] **Nord** — Nord color palette
-- [ ] **Dracula** — Dracula color palette
+- [x] **Default Dark** — dark background, muted blues and greens
+- [x] **Default Light** — light background, darker tones
+- [x] **Solarized Dark** — classic solarized
+- [x] **Solarized Light** — classic solarized light
+- [x] **Nord** — Nord color palette
+- [x] **Dracula** — Dracula color palette
 
 ### Theme Loader (`internal/tui/theme/loader.go`)
 
-- [ ] Load custom themes from `~/.config/db/themes/<name>.yaml`
-- [ ] YAML format mapping color groups to hex values
-- [ ] Merge with defaults: custom theme only needs to override specific colors
-- [ ] Validation: reject invalid hex colors, warn on missing groups
+- [x] Load custom themes from `~/.config/db/themes/<name>.yaml`
+- [x] YAML format mapping color groups to hex values
+- [x] Merge with defaults: custom theme only needs to override specific colors
+- [x] Validation: reject invalid hex colors, warn on missing groups
 
 ### Integration
 
-- [ ] `:theme <name>` command to switch at runtime
-- [ ] `:theme` with no args lists available themes
-- [ ] `theme` key in config file sets default
-- [ ] `--theme` CLI flag overrides config
-- [ ] Theme change applies immediately to all components
+- [x] `:theme <name>` command to switch at runtime
+- [x] `:theme` with no args lists available themes
+- [x] `theme` key in config file sets default
+- [x] `--theme` CLI flag overrides config
+- [x] Theme change applies immediately to all components
 
 ### Theme Config Format
 
@@ -71,10 +71,10 @@ colors:
 
 ## Tests
 
-- [ ] Unit: theme loading from YAML
-- [ ] Unit: merge with defaults
-- [ ] Unit: validation rejects bad colors
-- [ ] Unit: all built-in themes parse correctly
+- [x] Unit: theme loading from YAML
+- [x] Unit: merge with defaults
+- [x] Unit: validation rejects bad colors
+- [x] Unit: all built-in themes parse correctly
 
 ## Acceptance Criteria
 

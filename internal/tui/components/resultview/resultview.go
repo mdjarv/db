@@ -20,7 +20,6 @@ const defaultSeparator = ","
 type Model struct {
 	table     table.Model
 	scroll    *ScrollState
-	inspector Inspector
 	focused   bool
 	width     int
 	height    int
@@ -31,13 +30,6 @@ type Model struct {
 	duration time.Duration
 	errMsg   string
 	hasData  bool
-
-	// cell editing
-	editing      bool
-	editInput    string
-	editRow      int
-	editCol      int
-	editOriginal string
 
 	// operator pending (for dR, oR sequences)
 	pendingOp string
@@ -125,14 +117,6 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
-	if m.inspector.IsActive() {
-		return m.inspector.Update(km)
-	}
-
-	if m.editing {
-		return m.updateEdit(km)
-	}
-
 	switch m.table.Visual {
 	case table.VisualLine:
 		return m.updateVisualLine(km)
@@ -142,9 +126,6 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.updateNormal(km)
 	}
 }
-
-// IsEditing returns whether cell editing is active.
-func (m *Model) IsEditing() bool { return m.editing }
 
 func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 	key := km.String()
@@ -190,16 +171,14 @@ func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 		m.table.FullPageDown()
 	case "ctrl+b":
 		m.table.FullPageUp()
-	case "enter":
-		return m.inspectCell()
+	case "enter", "e":
+		return m.startEdit()
 	case "y":
 		content := m.table.YankCell()
 		return func() tea.Msg { return core.YankMsg{Content: content} }
 	case "Y":
 		content := m.table.YankRow(m.separator)
 		return func() tea.Msg { return core.YankMsg{Content: content} }
-	case "e":
-		return m.startEdit()
 	case "d":
 		m.pendingOp = "d"
 	case "o":
@@ -223,57 +202,15 @@ func (m *Model) startEdit() tea.Cmd {
 	if val == table.NullPlaceholder {
 		val = ""
 	}
-	m.editing = true
-	m.editRow = row
-	m.editCol = col
-	m.editOriginal = m.table.Rows[row][col]
-	m.editInput = val
-	return func() tea.Msg { return core.ModeChangedMsg{Mode: core.ModeEdit} }
-}
-
-func (m *Model) updateEdit(km tea.KeyMsg) tea.Cmd {
-	switch km.Type {
-	case tea.KeyEsc:
-		m.editing = false
-		return func() tea.Msg { return core.EditCancelMsg{} }
-	case tea.KeyEnter:
-		m.editing = false
-		row := m.editRow
-		col := m.editCol
-		oldVal := m.editOriginal
-		newVal := m.editInput
-		if newVal == "" {
-			newVal = table.NullPlaceholder
-		}
-		// update display value
-		if row < len(m.table.Rows) && col < len(m.table.Rows[row]) {
-			m.table.Rows[row][col] = newVal
-		}
-		return func() tea.Msg {
-			return core.EditCellMsg{Row: row, Col: col, OldValue: oldVal, NewValue: newVal}
-		}
-	case tea.KeyBackspace:
-		if len(m.editInput) > 0 {
-			m.editInput = m.editInput[:len(m.editInput)-1]
-		}
-	case tea.KeyRunes:
-		m.editInput += string(km.Runes)
-	}
-	return nil
-}
-
-var editStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("232")).
-	Background(lipgloss.Color("220"))
-
-func (m *Model) editOverlay() string {
 	colName := ""
-	if m.editCol < len(m.columns) {
-		colName = m.columns[m.editCol].Name
+	typeName := ""
+	if col < len(m.columns) {
+		colName = m.columns[col].Name
+		typeName = m.columns[col].TypeName
 	}
-	label := lipgloss.NewStyle().Bold(true).Render("Edit " + colName + ": ")
-	input := editStyle.Render(m.editInput + "\u2588")
-	return label + input
+	return func() tea.Msg {
+		return core.EditRequestMsg{Row: row, Col: col, ColName: colName, TypeName: typeName, Value: val}
+	}
 }
 
 // MarkModified marks a cell as modified (yellow highlight).
@@ -314,22 +251,6 @@ func (m *Model) RestoreCell(row, col int, value string) {
 		m.table.Rows[row][col] = value
 	}
 	m.UnmarkModified(row, col)
-}
-
-func (m *Model) inspectCell() tea.Cmd {
-	if !m.hasData || len(m.columns) == 0 {
-		return nil
-	}
-	col := m.table.CursorCol
-	if col >= len(m.columns) {
-		return nil
-	}
-	val := m.table.YankCell()
-	if val == table.NullPlaceholder {
-		val = "NULL"
-	}
-	m.inspector.Open(m.columns[col].Name, m.columns[col].TypeName, val)
-	return nil
 }
 
 func (m *Model) updateVisualLine(km tea.KeyMsg) tea.Cmd {
@@ -401,10 +322,6 @@ func (m *Model) View() string {
 		Width(innerW).
 		Height(innerH)
 
-	if m.inspector.IsActive() {
-		return style.Render(m.inspector.View(innerW, innerH))
-	}
-
 	if m.errMsg != "" {
 		return style.Render(t.Error.Render("Error: " + m.errMsg))
 	}
@@ -422,9 +339,6 @@ func (m *Model) View() string {
 		Height(innerH)
 
 	content := m.table.View(m.focused)
-	if m.editing {
-		content += "\n" + m.editOverlay()
-	}
 	top := noBottom.Render(content)
 
 	status := m.statusLine()
@@ -518,6 +432,9 @@ func (m *Model) SetSize(w, h int) {
 
 // SetSeparator sets the CSV separator.
 func (m *Model) SetSeparator(sep string) { m.separator = sep }
+
+// TableRows returns the underlying table rows slice.
+func (m *Model) TableRows() [][]string { return m.table.Rows }
 
 // TableCursorRow returns the result table cursor row.
 func (m *Model) TableCursorRow() int { return m.table.CursorRow }

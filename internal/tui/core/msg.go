@@ -79,23 +79,14 @@ type ExportRequestMsg struct {
 	Path   string
 }
 
-// CellInspectMsg opens the cell inspector popup.
-type CellInspectMsg struct {
-	Column   string
+// EditRequestMsg requests opening the edit dialog for a cell.
+type EditRequestMsg struct {
+	Row      int
+	Col      int
+	ColName  string
 	TypeName string
 	Value    string
 }
-
-// EditCellMsg signals that a cell edit was confirmed.
-type EditCellMsg struct {
-	Row      int
-	Col      int
-	OldValue string
-	NewValue string
-}
-
-// EditCancelMsg signals that cell editing was cancelled.
-type EditCancelMsg struct{}
 
 // DeleteRowMsg requests deletion of the current row.
 type DeleteRowMsg struct {

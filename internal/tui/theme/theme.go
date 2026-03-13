@@ -88,10 +88,6 @@ func (t *Theme) Build() *Theme {
 		EditorSelect: lipgloss.NewStyle().Background(lipgloss.Color(c.UI.EditorSelect)).Foreground(lipgloss.Color(c.UI.EditorSelectFG)),
 		Gutter:       lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Gutter)),
 
-		// Inspector
-		InspectorTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.Chrome.BorderFocused)),
-		InspectorType:  lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Dim)),
-
 		// Data editing
 		Modified: lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.ModifiedFG)).Background(lipgloss.Color(c.UI.Modified)),
 		Deleted:  lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Deleted)).Strikethrough(true),
@@ -217,10 +213,6 @@ type Styles struct {
 	NormalCursor lipgloss.Style
 	EditorSelect lipgloss.Style
 	Gutter       lipgloss.Style
-
-	// Inspector
-	InspectorTitle lipgloss.Style
-	InspectorType  lipgloss.Style
 
 	// Data editing
 	Modified lipgloss.Style
