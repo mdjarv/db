@@ -292,7 +292,7 @@ var (
 	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
 	selectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("208"))
 	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
 )
 
 // View renders the table.
