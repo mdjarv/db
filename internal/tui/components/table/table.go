@@ -129,6 +129,60 @@ func (m *Model) GotoBottom() {
 	m.ensureRowVisible()
 }
 
+// GotoFirstCol moves cursor to first column.
+func (m *Model) GotoFirstCol() {
+	m.CursorCol = 0
+	m.ColOffset = 0
+}
+
+// GotoLastCol moves cursor to last column.
+func (m *Model) GotoLastCol() {
+	if len(m.Columns) > 0 {
+		m.CursorCol = len(m.Columns) - 1
+		m.ensureColVisible()
+	}
+}
+
+// HalfPageDown moves cursor half a page down.
+func (m *Model) HalfPageDown() {
+	half := m.ViewHeight() / 2
+	if half < 1 {
+		half = 1
+	}
+	m.CursorRow = min(m.CursorRow+half, len(m.Rows)-1)
+	m.ensureRowVisible()
+}
+
+// HalfPageUp moves cursor half a page up.
+func (m *Model) HalfPageUp() {
+	half := m.ViewHeight() / 2
+	if half < 1 {
+		half = 1
+	}
+	m.CursorRow = max(m.CursorRow-half, 0)
+	m.ensureRowVisible()
+}
+
+// FullPageDown moves cursor a full page down.
+func (m *Model) FullPageDown() {
+	vh := m.ViewHeight()
+	if vh < 1 {
+		vh = 1
+	}
+	m.CursorRow = min(m.CursorRow+vh, len(m.Rows)-1)
+	m.ensureRowVisible()
+}
+
+// FullPageUp moves cursor a full page up.
+func (m *Model) FullPageUp() {
+	vh := m.ViewHeight()
+	if vh < 1 {
+		vh = 1
+	}
+	m.CursorRow = max(m.CursorRow-vh, 0)
+	m.ensureRowVisible()
+}
+
 // ToggleLineAxis switches between row and column axis in V-LINE mode.
 func (m *Model) ToggleLineAxis() {
 	if m.Visual != VisualLine {
@@ -277,6 +331,9 @@ func escapeCSV(val, sep string) string {
 
 // Rendering
 
+// NullPlaceholder is the display string for NULL values.
+const NullPlaceholder = "\x00NULL\x00"
+
 var (
 	headerStyle    = lipgloss.NewStyle().Bold(true)
 	separatorColor = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -285,6 +342,7 @@ var (
 	colSelectStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("223")).Background(lipgloss.Color("94"))
 	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	nullStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
 )
 
 // View renders the table.
@@ -336,8 +394,18 @@ func (m *Model) View(focused bool) string {
 			if i < len(m.Rows[r]) {
 				val = m.Rows[r][i]
 			}
-			text := padCell(val, m.Columns[i].Width)
-			sb.WriteString(m.styleCell(text, r, i, focused))
+			isNull := val == NullPlaceholder
+			if isNull {
+				text := padCell("NULL", m.Columns[i].Width)
+				styled := m.styleCell(text, r, i, focused)
+				if !m.hasSelectionStyle(r, i, focused) {
+					styled = nullStyle.Render(text)
+				}
+				sb.WriteString(styled)
+			} else {
+				text := truncateCell(val, m.Columns[i].Width)
+				sb.WriteString(m.styleCell(text, r, i, focused))
+			}
 		}
 		if r < endRow-1 {
 			sb.WriteByte('\n')
@@ -400,9 +468,32 @@ func (m *Model) isColSelected(col int) bool {
 	return true
 }
 
+func (m *Model) hasSelectionStyle(row, col int, focused bool) bool {
+	switch m.Visual {
+	case VisualLine:
+		inRow := m.inRowRange(row)
+		inCol := col >= m.LineColStart && col <= m.LineColEnd
+		return (inRow && inCol) || inCol
+	case VisualBlock:
+		return m.inRowRange(row) && m.inBlockColRange(col)
+	default:
+		return focused && row == m.CursorRow
+	}
+}
+
 func padCell(val string, width int) string {
 	if len(val) > width {
 		val = val[:width]
+	}
+	return fmt.Sprintf("%-*s", width, val)
+}
+
+func truncateCell(val string, width int) string {
+	if len(val) > width {
+		if width > 1 {
+			return fmt.Sprintf("%-*s", width, val[:width-1]+"\u2026")
+		}
+		return val[:width]
 	}
 	return fmt.Sprintf("%-*s", width, val)
 }

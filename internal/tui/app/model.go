@@ -2,16 +2,23 @@
 package app
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/mdjarv/db/internal/db"
+	"github.com/mdjarv/db/internal/export"
+	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/components/queryeditor"
 	"github.com/mdjarv/db/internal/tui/components/resultview"
 	"github.com/mdjarv/db/internal/tui/components/statusbar"
+	"github.com/mdjarv/db/internal/tui/components/table"
 	"github.com/mdjarv/db/internal/tui/components/tablelist"
 	"github.com/mdjarv/db/internal/tui/core"
 	"github.com/mdjarv/db/internal/tui/pane"
@@ -32,6 +39,8 @@ type Model struct {
 	resultView  *resultview.Model
 	statusBar   *statusbar.Model
 	commandBar  *commandbar.Model
+	conn        db.Conn
+	inspector   schema.Inspector
 
 	width     int
 	height    int
@@ -64,9 +73,22 @@ func New() Model {
 	}
 }
 
+// NewWithConn creates the app model with a database connection.
+func NewWithConn(conn db.Conn, insp schema.Inspector, connInfo string) Model {
+	m := New()
+	m.conn = conn
+	m.inspector = insp
+	m.statusBar.SetConn(connInfo)
+	return m
+}
+
 // Init returns the initial command.
 func (m Model) Init() tea.Cmd {
-	return tea.WindowSize()
+	cmds := []tea.Cmd{tea.WindowSize()}
+	if m.inspector != nil {
+		cmds = append(cmds, m.loadSchema())
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles all messages.
@@ -87,6 +109,80 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commandbar.CancelMsg:
 		m.mode = core.ModeNormal
 		m.statusBar.SetMode(m.mode)
+		return m, nil
+
+	// M8: mode changes from components (a/A/I/o/O in queryeditor)
+	case core.ModeChangedMsg:
+		m.mode = msg.Mode
+		m.statusBar.SetMode(m.mode)
+		if msg.Mode == core.ModeInsert {
+			m.statusBar.SetMessage("")
+		}
+		cmd := m.queryEditor.Update(msg)
+		return m, cmd
+
+	case core.QuerySubmittedMsg:
+		if m.conn == nil {
+			m.statusBar.SetMessage("not connected")
+			return m, nil
+		}
+		m.statusBar.SetMessage("executing...")
+		return m, m.executeQuery(msg.SQL)
+
+	// M7: schema messages
+	case core.SchemaLoadedMsg:
+		cmd := m.tableList.Update(msg)
+		if msg.Err != nil {
+			m.statusBar.SetMessage("schema load failed: " + msg.Err.Error())
+		} else {
+			m.statusBar.SetMessage(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
+		}
+		return m, cmd
+
+	case core.TableSelectedMsg:
+		m.statusBar.SetMessage(msg.Table.Name)
+		if m.inspector != nil {
+			return m, m.loadTableDetail(msg.Table)
+		}
+		return m, nil
+
+	case core.TableDetailMsg:
+		m.tableList.Update(msg)
+		return m, nil
+
+	case core.QueryRequestMsg:
+		m.queryEditor.SetContent(msg.SQL)
+		m.statusBar.SetMessage("Query: " + msg.SQL)
+		return m, nil
+
+	case core.RefreshSchemaMsg:
+		if m.inspector != nil {
+			m.statusBar.SetMessage("refreshing schema...")
+			return m, m.loadSchema()
+		}
+		return m, nil
+
+	// M9: query result messages
+	case core.QueryResultMsg:
+		m.resultView.SetResult(msg.Columns, msg.Rows, msg.Duration)
+		m.panes.SetActive(pane.ResultView)
+		m.statusBar.SetMessage(fmt.Sprintf("Query OK: %d rows in %s", len(msg.Rows), msg.Duration))
+		return m, nil
+
+	case core.QueryErrorMsg:
+		m.resultView.SetError(msg.Err)
+		m.statusBar.SetMessage("Query error: " + msg.Err.Error())
+		return m, nil
+
+	case core.ExportRequestMsg:
+		return m, m.exportResult(msg.Format, msg.Path)
+
+	case exportResultMsg:
+		if msg.err != nil {
+			m.statusBar.SetMessage("export failed: " + msg.err.Error())
+		} else {
+			m.statusBar.SetMessage("exported to " + msg.path)
+		}
 		return m, nil
 
 	case core.YankMsg:
@@ -129,10 +225,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleAction(action)
 		}
 
-		if m.mode == core.ModeNormal {
-			active := m.panes.Active()
-			if active != nil {
+		// M8: forward keys to active pane in normal mode,
+		// or to queryeditor in insert mode
+		active := m.panes.Active()
+		if active != nil {
+			if m.mode == core.ModeNormal {
 				_, cmd := active.Update(msg)
+				cmds = append(cmds, cmd)
+			} else if m.mode == core.ModeInsert && m.panes.ActiveID() == pane.QueryEditor {
+				cmd := m.queryEditor.Update(msg)
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -148,10 +249,12 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 	case ActionModeNormal:
 		m.mode = core.ModeNormal
 		m.statusBar.SetMode(m.mode)
+		m.queryEditor.Update(core.ModeChangedMsg{Mode: core.ModeNormal})
 	case ActionModeInsert:
 		m.mode = core.ModeInsert
 		m.statusBar.SetMode(m.mode)
 		m.statusBar.SetMessage("")
+		m.queryEditor.Update(core.ModeChangedMsg{Mode: core.ModeInsert})
 	case ActionModeCommand:
 		m.mode = core.ModeCommand
 		m.statusBar.SetMode(m.mode)
@@ -202,11 +305,155 @@ type yankResultMsg struct {
 	err error
 }
 
+type exportResultMsg struct {
+	path string
+	err  error
+}
+
 func copyToClipboard(content string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command("wl-copy", "--")
 		cmd.Stdin = strings.NewReader(content)
 		return yankResultMsg{err: cmd.Run()}
+	}
+}
+
+func (m Model) executeQuery(sql string) tea.Cmd {
+	conn := m.conn
+	return func() tea.Msg {
+		ctx := context.Background()
+		result, err := conn.Query(ctx, sql)
+		if err != nil {
+			return core.QueryErrorMsg{Err: err}
+		}
+		defer result.Rows.Close()
+
+		cols := make([]core.ResultColumn, len(result.Columns))
+		for i, c := range result.Columns {
+			cols[i] = core.ResultColumn{Name: c.Name, TypeName: c.TypeName}
+		}
+
+		var rows [][]string
+		for result.Rows.Next() {
+			vals, err := result.Rows.Values()
+			if err != nil {
+				return core.QueryErrorMsg{Err: err}
+			}
+			row := make([]string, len(vals))
+			for i, v := range vals {
+				if v == nil {
+					row[i] = table.NullPlaceholder
+				} else {
+					row[i] = fmt.Sprintf("%v", v)
+				}
+			}
+			rows = append(rows, row)
+		}
+		if err := result.Rows.Err(); err != nil {
+			return core.QueryErrorMsg{Err: err}
+		}
+
+		return core.QueryResultMsg{Columns: cols, Rows: rows}
+	}
+}
+
+// M7: schema loading
+
+func (m Model) loadSchema() tea.Cmd {
+	insp := m.inspector
+	return func() tea.Msg {
+		tables, err := insp.Tables(context.Background(), "public")
+		return core.SchemaLoadedMsg{Tables: tables, Err: err}
+	}
+}
+
+func (m Model) loadTableDetail(t schema.Table) tea.Cmd {
+	insp := m.inspector
+	return func() tea.Msg {
+		ctx := context.Background()
+		cols, _ := insp.Columns(ctx, t.Schema, t.Name)
+		idxs, _ := insp.Indexes(ctx, t.Schema, t.Name)
+		cons, _ := insp.Constraints(ctx, t.Schema, t.Name)
+		fks, _ := insp.ForeignKeys(ctx, t.Schema, t.Name)
+		return core.TableDetailMsg{
+			Table:       t,
+			Columns:     cols,
+			Indexes:     idxs,
+			Constraints: cons,
+			ForeignKeys: fks,
+		}
+	}
+}
+
+// M9: export support
+
+func (m *Model) parseExport(args string) tea.Cmd {
+	parts := strings.SplitN(strings.TrimSpace(args), " ", 2)
+	if len(parts) < 2 || parts[1] == "" {
+		return func() tea.Msg {
+			return exportResultMsg{err: fmt.Errorf("usage: export <csv|json|sql> <file>")}
+		}
+	}
+	format := parts[0]
+	path := parts[1]
+	switch format {
+	case "csv", "json", "sql":
+	default:
+		return func() tea.Msg {
+			return exportResultMsg{err: fmt.Errorf("unknown format: %s (csv, json, sql)", format)}
+		}
+	}
+	return func() tea.Msg {
+		return core.ExportRequestMsg{Format: format, Path: path}
+	}
+}
+
+func (m *Model) exportResult(format, path string) tea.Cmd {
+	cols, rows := m.resultView.ResultData()
+	if cols == nil {
+		return func() tea.Msg {
+			return exportResultMsg{err: fmt.Errorf("no results to export")}
+		}
+	}
+
+	dbCols := make([]db.Column, len(cols))
+	for i, c := range cols {
+		dbCols[i] = db.Column{Name: c.Name, TypeName: c.TypeName}
+	}
+
+	rowsCopy := make([][]string, len(rows))
+	copy(rowsCopy, rows)
+
+	return func() tea.Msg {
+		f, err := os.Create(path)
+		if err != nil {
+			return exportResultMsg{path: path, err: err}
+		}
+
+		var efmt export.Format
+		switch format {
+		case "csv":
+			efmt = export.FormatCSV
+		case "json":
+			efmt = export.FormatJSON
+		case "sql":
+			efmt = export.FormatSQL
+		}
+
+		iter := &sliceRowIterator{data: rowsCopy}
+		result := &db.Result{
+			Columns: dbCols,
+			Rows:    iter,
+		}
+
+		exp := export.NewExporter(efmt, export.Options{
+			NullString: table.NullPlaceholder,
+		})
+		err = exp.Export(f, result)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		return exportResultMsg{path: path, err: err}
 	}
 }
 
@@ -219,9 +466,16 @@ func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "w":
 		sql := m.queryEditor.Content()
-		m.statusBar.SetMessage("Query: " + sql)
+		return m, func() tea.Msg {
+			return core.QuerySubmittedMsg{SQL: sql}
+		}
+	case "clear":
+		m.queryEditor.SetContent("")
+		m.statusBar.SetMessage("buffer cleared")
 	case "set":
 		m.statusBar.SetMessage("set: " + msg.Args)
+	case "export":
+		return m, m.parseExport(msg.Args)
 	default:
 		m.statusBar.SetMessage("unknown command: " + msg.Command)
 	}
@@ -279,13 +533,24 @@ func (m Model) View() string {
 
 func (m Model) helpView() string {
 	help := HelpText()
+	lines := strings.Split(help, "\n")
+
+	// border(2) + padding(2) + some margin
+	maxLines := m.height - 6
+	if maxLines < 5 {
+		maxLines = 5
+	}
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62")).
 		Padding(1, 2).
 		Width(50)
 
-	overlay := style.Render(help)
+	overlay := style.Render(strings.Join(lines, "\n"))
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
 }
@@ -356,3 +621,32 @@ func (a *paneAdapter) SetSize(w, h int) {
 		a.resultview.SetSize(w, h)
 	}
 }
+
+type sliceRowIterator struct {
+	data [][]string
+	pos  int
+}
+
+func (it *sliceRowIterator) Next() bool {
+	if it.pos < len(it.data) {
+		it.pos++
+		return true
+	}
+	return false
+}
+
+func (it *sliceRowIterator) Values() ([]any, error) {
+	row := it.data[it.pos-1]
+	vals := make([]any, len(row))
+	for i, v := range row {
+		if v == table.NullPlaceholder {
+			vals[i] = nil
+		} else {
+			vals[i] = v
+		}
+	}
+	return vals, nil
+}
+
+func (it *sliceRowIterator) Err() error { return nil }
+func (it *sliceRowIterator) Close()     {}

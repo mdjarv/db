@@ -21,8 +21,7 @@ type Model struct {
 // New creates a status bar.
 func New() *Model {
 	return &Model{
-		connStr: "disconnected",
-		txMode:  "auto",
+		txMode: "auto",
 	}
 }
 
@@ -64,10 +63,18 @@ func (m *Model) View() string {
 
 	modeStr := modeStyle.Render(m.mode.String())
 
-	connStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245")).
-		Padding(0, 1)
-	connStr := connStyle.Render(m.connStr)
+	var connStr string
+	if m.connStr != "" {
+		connStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("78")).
+			Padding(0, 1)
+		connStr = connStyle.Render("\uf1c0 " + m.connStr)
+	} else {
+		connStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Padding(0, 1)
+		connStr = connStyle.Render("\uf1c0 disconnected")
+	}
 
 	txStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("245")).

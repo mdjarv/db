@@ -28,6 +28,7 @@ var defaultCommands = []Command{
 	{Name: "quit", Desc: "quit"},
 	{Name: "w", Desc: "run query"},
 	{Name: "set", Desc: "change setting"},
+	{Name: "export", Desc: "export results (csv|json|sql) <file>"},
 }
 
 // Model is the command bar state.

@@ -88,7 +88,7 @@ func TestHelpText(t *testing.T) {
 	if text == "" {
 		t.Error("HelpText() returned empty string")
 	}
-	for _, want := range []string{"Navigation:", "Modes:", "Panes:", "Commands:"} {
+	for _, want := range []string{"Navigation:", "Modes:", "Table List:", "Results:", "Commands:"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("HelpText() missing section %q", want)
 		}
