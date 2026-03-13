@@ -128,6 +128,48 @@ func TestStoreRemoveClearsDefault(t *testing.T) {
 	}
 }
 
+func TestStoreRename(t *testing.T) {
+	s := testStore(t)
+	if err := s.Add(ConnectionConfig{Name: "old", Host: "h", Port: 5432}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetDefault("old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename("old", "new"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if _, err := s.Get("old"); err == nil {
+		t.Fatal("old name should not exist after rename")
+	}
+	got, err := s.Get("new")
+	if err != nil {
+		t.Fatalf("Get new: %v", err)
+	}
+	if got.Host != "h" {
+		t.Errorf("renamed config host = %q, want h", got.Host)
+	}
+	if s.DefaultName() != "new" {
+		t.Errorf("default should follow rename, got %q", s.DefaultName())
+	}
+}
+
+func TestStoreRenameConflict(t *testing.T) {
+	s := testStore(t)
+	_ = s.Add(ConnectionConfig{Name: "a", Host: "h", Port: 5432})
+	_ = s.Add(ConnectionConfig{Name: "b", Host: "h", Port: 5432})
+	if err := s.Rename("a", "b"); err == nil {
+		t.Fatal("expected error renaming to existing name")
+	}
+}
+
+func TestStoreRenameNotFound(t *testing.T) {
+	s := testStore(t)
+	if err := s.Rename("missing", "new"); err == nil {
+		t.Fatal("expected error for nonexistent source")
+	}
+}
+
 func TestStoreLoadEmpty(t *testing.T) {
 	s := testStore(t)
 	f, err := s.load()

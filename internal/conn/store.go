@@ -137,6 +137,31 @@ func (s *Store) DefaultName() string {
 	return f.Default
 }
 
+// Rename changes a connection's key. Updates default if it pointed to the old name.
+func (s *Store) Rename(oldName, newName string) error {
+	if newName == "" {
+		return fmt.Errorf("new name required")
+	}
+	f, err := s.load()
+	if err != nil {
+		return err
+	}
+	cfg, ok := f.Connections[oldName]
+	if !ok {
+		return fmt.Errorf("connection %q not found", oldName)
+	}
+	if _, exists := f.Connections[newName]; exists {
+		return fmt.Errorf("connection %q already exists", newName)
+	}
+	delete(f.Connections, oldName)
+	cfg.Name = newName
+	f.Connections[newName] = cfg
+	if f.Default == oldName {
+		f.Default = newName
+	}
+	return s.save(f)
+}
+
 // SetDefault sets the default connection name.
 func (s *Store) SetDefault(name string) error {
 	f, err := s.load()
