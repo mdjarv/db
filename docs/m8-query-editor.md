@@ -9,20 +9,20 @@ Multi-line SQL editor with syntax highlighting and autocomplete. Vim-aware: only
 ### Editor Component (`internal/tui/components/queryeditor/`)
 
 - [x] Multi-line text area with dynamic height (1 line up to 1/4 screen)
-- [ ] SQL syntax highlighting via chroma
-- [ ] Line numbers
-- [ ] Cursor positioning and movement
-- [ ] Text selection (visual mode — stretch goal)
+- [x] SQL syntax highlighting via chroma
+- [x] Line numbers
+- [x] Cursor positioning and movement (block cursor normal mode, underline cursor insert mode)
+- [x] Text selection (visual mode — v char, V line)
 
 ### Vim Integration
 
-- [ ] NORMAL mode: hjkl cursor movement, w/b word jump, 0/$ line start/end
-- [ ] INSERT mode: text input, backspace, enter (newline)
-- [ ] `i` enter insert at cursor, `a` after cursor, `I` start of line, `A` end of line
-- [ ] `o` new line below, `O` new line above
-- [ ] `dd` delete line, `D` delete to end of line
-- [ ] `u` undo, `Ctrl-r` redo (undo ring)
-- [ ] `Esc` return to normal mode
+- [x] NORMAL mode: hjkl cursor movement, w/b word jump, 0/$ line start/end
+- [x] INSERT mode: text input, backspace, enter (newline), arrow keys, space
+- [x] `i` enter insert at cursor, `a` after cursor, `I` start of line, `A` end of line
+- [x] `o` new line below, `O` new line above
+- [x] `dd` delete line, `D` delete to end of line
+- [x] `u` undo, `Ctrl-r` redo (undo ring)
+- [x] `Esc` return to normal mode
 
 ### Autocomplete
 
@@ -43,9 +43,9 @@ Multi-line SQL editor with syntax highlighting and autocomplete. Vim-aware: only
 
 ### Query Buffer
 
-- [ ] Current query text preserved across pane switches
-- [ ] Pre-populated when table browser sends a query
-- [ ] Clear buffer: `:clear` command
+- [x] Current query text preserved across pane switches
+- [x] Pre-populated when table browser sends a query
+- [x] Clear buffer: `:clear` command
 
 ## Keybindings
 
@@ -57,10 +57,20 @@ Multi-line SQL editor with syntax highlighting and autocomplete. Vim-aware: only
 | `w/b` | Normal | Word forward/backward |
 | `0/$` | Normal | Start/end of line |
 | `dd` | Normal | Delete line |
+| `D` | Normal | Delete to end of line |
+| `x` | Normal | Delete char |
 | `u` | Normal | Undo |
 | `Ctrl-r` | Normal | Redo |
+| `v` | Normal | Visual char mode |
+| `V` | Normal | Visual line mode |
+| `yy`/`Y` | Normal | Yank current line |
+| `p`/`P` | Normal | Paste after/before |
+| `y` | Visual | Yank selection + exit visual |
+| `Esc` | Visual | Exit visual mode |
+| `arrow keys` | Insert | Move cursor |
+| `Home`/`End` | Insert | Line start/end |
 | `Ctrl-Space` | Insert | Trigger autocomplete |
-| `Ctrl-Enter` | Any | Execute query |
+| `Enter` | Normal | Execute query |
 | `:w` | Command | Execute query |
 
 ## Tests

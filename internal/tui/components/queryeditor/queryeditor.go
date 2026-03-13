@@ -14,6 +14,14 @@ import (
 
 const undoLimit = 100
 
+type visualKind int
+
+const (
+	visualNone visualKind = iota
+	visualChar
+	visualLine
+)
+
 type snapshot struct {
 	lines   []string
 	cursorX int
@@ -34,8 +42,20 @@ type Model struct {
 	undoStack []snapshot
 	redoStack []snapshot
 
-	pending string // for multi-key sequences like "dd"
+	pending string // for multi-key sequences like "dd", "yy"
+
+	visual        visualKind
+	anchorX       int
+	anchorY       int
+	pasteBuffer   string
+	pasteLinewise bool
 }
+
+var (
+	insertCursorStyle = lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("45"))
+	normalCursorStyle = lipgloss.NewStyle().Reverse(true)
+	selectStyle       = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+)
 
 // New creates a query editor.
 func New() *Model {
@@ -105,9 +125,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case core.ModeChangedMsg:
 		m.mode = msg.Mode
 		m.pending = ""
+		m.visual = visualNone // esc or mode change clears visual
 	case tea.KeyMsg:
 		if m.mode == core.ModeInsert {
 			return m.insertUpdate(msg)
+		}
+		if m.visual != visualNone {
+			return m.visualUpdate(msg)
 		}
 		return m.normalUpdate(msg)
 	}
@@ -132,6 +156,13 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 			m.cursorX = 0
 			m.offset = 0
 			return nil
+		}
+		return nil
+	}
+	if m.pending == "y" {
+		m.pending = ""
+		if key == "y" {
+			return m.yankLine()
 		}
 		return nil
 	}
@@ -186,6 +217,22 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 		m.undo()
 	case "ctrl+r":
 		m.redo()
+	case "v":
+		m.visual = visualChar
+		m.anchorX = m.cursorX
+		m.anchorY = m.cursorY
+	case "V":
+		m.visual = visualLine
+		m.anchorX = 0
+		m.anchorY = m.cursorY
+	case "y":
+		m.pending = "y"
+	case "Y":
+		return m.yankLine()
+	case "p":
+		return m.paste(false)
+	case "P":
+		return m.paste(true)
 	case "a":
 		line := m.lines[m.cursorY]
 		if len(line) > 0 {
@@ -226,6 +273,128 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) visualUpdate(msg tea.KeyMsg) tea.Cmd {
+	key := msg.String()
+	switch key {
+	case "esc":
+		m.visual = visualNone
+	case "j", "down":
+		if m.cursorY < len(m.lines)-1 {
+			m.cursorY++
+			m.clampX()
+		}
+	case "k", "up":
+		if m.cursorY > 0 {
+			m.cursorY--
+			m.clampX()
+		}
+	case "h", "left":
+		if m.cursorX > 0 {
+			m.cursorX--
+		}
+	case "l", "right":
+		line := m.lines[m.cursorY]
+		maxX := len(line) - 1
+		if maxX < 0 {
+			maxX = 0
+		}
+		if m.cursorX < maxX {
+			m.cursorX++
+		}
+	case "g":
+		m.cursorY = 0
+		m.cursorX = 0
+		m.offset = 0
+	case "G":
+		m.cursorY = len(m.lines) - 1
+		m.clampX()
+	case "y":
+		text := m.yankSelection()
+		m.pasteLinewise = m.visual == visualLine
+		m.pasteBuffer = text
+		m.visual = visualNone
+		return func() tea.Msg { return core.YankMsg{Content: text} }
+	}
+	m.scrollToCursor()
+	return nil
+}
+
+func (m *Model) yankLine() tea.Cmd {
+	line := m.lines[m.cursorY]
+	m.pasteBuffer = line
+	m.pasteLinewise = true
+	return func() tea.Msg { return core.YankMsg{Content: line} }
+}
+
+func (m *Model) yankSelection() string {
+	startY, endY, startX, endX := m.selectionBounds()
+
+	if m.visual == visualLine {
+		var sb strings.Builder
+		for i := startY; i <= endY; i++ {
+			if i > startY {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(m.lines[i])
+		}
+		return sb.String()
+	}
+
+	// char mode
+	if startY == endY {
+		line := m.lines[startY]
+		end := min(endX+1, len(line))
+		return line[startX:end]
+	}
+	var sb strings.Builder
+	sb.WriteString(m.lines[startY][startX:])
+	for i := startY + 1; i < endY; i++ {
+		sb.WriteByte('\n')
+		sb.WriteString(m.lines[i])
+	}
+	sb.WriteByte('\n')
+	end := min(endX+1, len(m.lines[endY]))
+	sb.WriteString(m.lines[endY][:end])
+	return sb.String()
+}
+
+func (m *Model) paste(before bool) tea.Cmd {
+	if m.pasteBuffer == "" {
+		return nil
+	}
+	m.saveUndo()
+	if m.pasteLinewise {
+		pasteLines := strings.Split(m.pasteBuffer, "\n")
+		insertIdx := m.cursorY + 1
+		if before {
+			insertIdx = m.cursorY
+		}
+		for i, l := range pasteLines {
+			m.lines = insertAt(m.lines, insertIdx+i, l)
+		}
+		m.cursorY = insertIdx
+		m.cursorX = 0
+	} else {
+		line := m.lines[m.cursorY]
+		x := m.cursorX
+		if !before && x < len(line) {
+			x++
+		}
+		m.lines[m.cursorY] = line[:x] + m.pasteBuffer + line[x:]
+		m.cursorX = x + len(m.pasteBuffer) - 1
+	}
+	m.scrollToCursor()
+	return nil
+}
+
+// selectionBounds returns (startY, endY, startX, endX) with start <= end.
+func (m *Model) selectionBounds() (startY, endY, startX, endX int) {
+	if m.anchorY < m.cursorY || (m.anchorY == m.cursorY && m.anchorX <= m.cursorX) {
+		return m.anchorY, m.cursorY, m.anchorX, m.cursorX
+	}
+	return m.cursorY, m.anchorY, m.cursorX, m.anchorX
+}
+
 func (m *Model) enterInsert() tea.Cmd {
 	return func() tea.Msg {
 		return core.ModeChangedMsg{Mode: core.ModeInsert}
@@ -243,6 +412,40 @@ func (m *Model) insertUpdate(msg tea.KeyMsg) tea.Cmd {
 		line := m.lines[m.cursorY]
 		m.lines[m.cursorY] = line[:m.cursorX] + "    " + line[m.cursorX:]
 		m.cursorX += 4
+	case tea.KeySpace:
+		m.saveUndo()
+		line := m.lines[m.cursorY]
+		m.lines[m.cursorY] = line[:m.cursorX] + " " + line[m.cursorX:]
+		m.cursorX++
+	case tea.KeyLeft:
+		if m.cursorX > 0 {
+			m.cursorX--
+		} else if m.cursorY > 0 {
+			m.cursorY--
+			m.cursorX = len(m.lines[m.cursorY])
+		}
+	case tea.KeyRight:
+		line := m.lines[m.cursorY]
+		if m.cursorX < len(line) {
+			m.cursorX++
+		} else if m.cursorY < len(m.lines)-1 {
+			m.cursorY++
+			m.cursorX = 0
+		}
+	case tea.KeyUp:
+		if m.cursorY > 0 {
+			m.cursorY--
+			m.clampX()
+		}
+	case tea.KeyDown:
+		if m.cursorY < len(m.lines)-1 {
+			m.cursorY++
+			m.clampX()
+		}
+	case tea.KeyHome:
+		m.cursorX = 0
+	case tea.KeyEnd:
+		m.cursorX = len(m.lines[m.cursorY])
 	case tea.KeyRunes:
 		m.saveUndo()
 		line := m.lines[m.cursorY]
@@ -406,7 +609,6 @@ func (m *Model) View() string {
 	gw := m.gutterWidth()
 
 	gutterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorStyle := lipgloss.NewStyle().Reverse(true)
 	contentWidth := max(m.width-2-gw, 1) // border takes 2
 
 	for i := m.offset; i < end; i++ {
@@ -414,8 +616,10 @@ func (m *Model) View() string {
 		line := m.lines[i]
 
 		var rendered string
-		if m.focused && i == m.cursorY {
-			rendered = m.renderLineWithCursor(line, cursorStyle)
+		if m.focused && m.visual != visualNone {
+			rendered = m.renderLineVisual(line, i, contentWidth)
+		} else if m.focused && i == m.cursorY {
+			rendered = m.renderLineWithCursor(line)
 		} else {
 			if len(line) > contentWidth {
 				line = line[:contentWidth]
@@ -444,15 +648,93 @@ func (m *Model) View() string {
 	return style.Render(sb.String())
 }
 
-func (m *Model) renderLineWithCursor(line string, cursorStyle lipgloss.Style) string {
+func (m *Model) renderLineWithCursor(line string) string {
+	cs := normalCursorStyle
+	if m.mode == core.ModeInsert {
+		cs = insertCursorStyle
+	}
 	if m.cursorX >= len(line) {
-		hl := m.highlightLine(line)
-		return hl + cursorStyle.Render(" ")
+		return m.highlightLine(line) + cs.Render(" ")
 	}
 	before := line[:m.cursorX]
 	ch := string(line[m.cursorX])
 	after := line[m.cursorX+1:]
-	return m.highlightLine(before) + cursorStyle.Render(ch) + m.highlightLine(after)
+	return m.highlightLine(before) + cs.Render(ch) + m.highlightLine(after)
+}
+
+func (m *Model) renderLineVisual(line string, lineIdx, contentWidth int) string {
+	startY, endY, startX, endX := m.selectionBounds()
+
+	if lineIdx < startY || lineIdx > endY {
+		if len(line) > contentWidth {
+			line = line[:contentWidth]
+		}
+		// cursor on unselected line
+		if lineIdx == m.cursorY {
+			return m.renderLineWithCursor(line)
+		}
+		return m.highlightLine(line)
+	}
+
+	var selStart, selEnd int
+	switch m.visual {
+	case visualLine:
+		selStart = 0
+		selEnd = len(line)
+	case visualChar:
+		switch {
+		case lineIdx == startY && lineIdx == endY:
+			selStart = startX
+			selEnd = min(endX+1, len(line))
+		case lineIdx == startY:
+			selStart = startX
+			selEnd = len(line)
+		case lineIdx == endY:
+			selStart = 0
+			selEnd = min(endX+1, len(line))
+		default:
+			selStart = 0
+			selEnd = len(line)
+		}
+	}
+
+	if selStart > len(line) {
+		selStart = len(line)
+	}
+	if selEnd > len(line) {
+		selEnd = len(line)
+	}
+	if selStart < 0 {
+		selStart = 0
+	}
+
+	before := line[:selStart]
+	sel := line[selStart:selEnd]
+	after := line[selEnd:]
+
+	rendered := m.highlightLine(before) + selectStyle.Render(sel) + m.highlightLine(after)
+
+	// overlay block cursor on cursor line
+	if lineIdx == m.cursorY && m.cursorX >= selStart && m.cursorX < selEnd {
+		// re-render: before-sel + before-cursor + cursor-char + after within sel + after-sel
+		beforeSel := line[:selStart]
+		beforeCur := line[selStart:m.cursorX]
+		cur := " "
+		if m.cursorX < len(line) {
+			cur = string(line[m.cursorX])
+		}
+		afterCur := ""
+		if m.cursorX+1 < selEnd {
+			afterCur = line[m.cursorX+1 : selEnd]
+		}
+		rendered = m.highlightLine(beforeSel) +
+			selectStyle.Render(beforeCur) +
+			normalCursorStyle.Render(cur) +
+			selectStyle.Render(afterCur) +
+			m.highlightLine(after)
+	}
+
+	return rendered
 }
 
 // highlightLine applies SQL syntax highlighting to a single line.
@@ -477,6 +759,9 @@ func (m *Model) SetContent(s string) {
 	m.cursorY = 0
 	m.offset = 0
 }
+
+// InVisual returns true when the editor is in local visual mode.
+func (m *Model) InVisual() bool { return m.visual != visualNone }
 
 // LineCount returns the number of lines in the editor.
 func (m *Model) LineCount() int { return len(m.lines) }

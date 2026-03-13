@@ -222,6 +222,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// v/V on query editor → editor-local visual mode, not result table visual
+		if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.QueryEditor {
+			if k := msg.String(); k == "v" || k == "V" {
+				cmd := m.queryEditor.Update(msg)
+				m.recalcLayout()
+				return m, cmd
+			}
+		}
+
 		action := MatchGlobal(msg, m.mode)
 		if action != ActionNone {
 			return m.handleAction(action)
