@@ -417,10 +417,10 @@ func (m *Model) View() string {
 		if m.focused && i == m.cursorY {
 			rendered = m.renderLineWithCursor(line, cursorStyle)
 		} else {
-			rendered = m.highlightLine(line)
-			if len(rendered) > contentWidth {
-				rendered = rendered[:contentWidth]
+			if len(line) > contentWidth {
+				line = line[:contentWidth]
 			}
+			rendered = m.highlightLine(line)
 		}
 
 		sb.WriteString(gutter)
@@ -477,6 +477,9 @@ func (m *Model) SetContent(s string) {
 	m.cursorY = 0
 	m.offset = 0
 }
+
+// LineCount returns the number of lines in the editor.
+func (m *Model) LineCount() int { return len(m.lines) }
 
 // Focused returns whether the pane is focused.
 func (m *Model) Focused() bool { return m.focused }

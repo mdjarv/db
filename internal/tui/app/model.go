@@ -152,6 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.QueryRequestMsg:
 		m.queryEditor.SetContent(msg.SQL)
+		m.panes.SetActive(pane.QueryEditor)
+		m.recalcLayout()
 		m.statusBar.SetMessage("Query: " + msg.SQL)
 		return m, nil
 
@@ -237,6 +239,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		m.recalcLayout()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -344,7 +347,7 @@ func (m Model) executeQuery(sql string) tea.Cmd {
 				if v == nil {
 					row[i] = table.NullPlaceholder
 				} else {
-					row[i] = fmt.Sprintf("%v", v)
+					row[i] = formatValue(v)
 				}
 			}
 			rows = append(rows, row)
@@ -354,6 +357,15 @@ func (m Model) executeQuery(sql string) tea.Cmd {
 		}
 
 		return core.QueryResultMsg{Columns: cols, Rows: rows}
+	}
+}
+
+func formatValue(v any) string {
+	switch val := v.(type) {
+	case [16]byte:
+		return fmt.Sprintf("%x-%x-%x-%x-%x", val[0:4], val[4:6], val[6:8], val[8:10], val[10:16])
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
@@ -471,6 +483,7 @@ func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
 		}
 	case "clear":
 		m.queryEditor.SetContent("")
+		m.recalcLayout()
 		m.statusBar.SetMessage("buffer cleared")
 	case "set":
 		m.statusBar.SetMessage("set: " + msg.Args)
@@ -491,7 +504,8 @@ func (m *Model) recalcLayout() {
 	leftW := max(int(float64(m.width)*m.leftRatio), minPaneWidth)
 	rightW := max(m.width-leftW, minPaneWidth)
 
-	topH := max(contentHeight/4, minPaneHeight)
+	maxTopH := max(contentHeight/4, minPaneHeight)
+	topH := max(min(m.queryEditor.LineCount()+2, maxTopH), minPaneHeight)
 	bottomH := max(contentHeight-topH, minPaneHeight)
 
 	m.tableList.SetSize(leftW, contentHeight)

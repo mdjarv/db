@@ -8,7 +8,7 @@ Multi-line SQL editor with syntax highlighting and autocomplete. Vim-aware: only
 
 ### Editor Component (`internal/tui/components/queryeditor/`)
 
-- [ ] Multi-line text area (build on `bubbles/textarea` or custom)
+- [x] Multi-line text area with dynamic height (1 line up to 1/4 screen)
 - [ ] SQL syntax highlighting via chroma
 - [ ] Line numbers
 - [ ] Cursor positioning and movement

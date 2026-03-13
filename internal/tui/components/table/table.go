@@ -335,7 +335,7 @@ func escapeCSV(val, sep string) string {
 const NullPlaceholder = "\x00NULL\x00"
 
 var (
-	headerStyle    = lipgloss.NewStyle().Bold(true)
+	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
 	separatorColor = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
 	selectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("208"))
@@ -356,6 +356,24 @@ func (m *Model) View(focused bool) string {
 	colSep := separatorColor.Render(" │ ")
 	hdrSep := separatorColor.Render("─┼─")
 
+	// compute partial column
+	usedWidth := 0
+	for i := m.ColOffset; i < endCol; i++ {
+		if i > m.ColOffset {
+			usedWidth += 3
+		}
+		usedWidth += m.Columns[i].Width
+	}
+	partialCol := -1
+	partialW := 0
+	if endCol < len(m.Columns) {
+		remaining := m.Width - usedWidth - 3
+		if remaining > 0 {
+			partialCol = endCol
+			partialW = remaining
+		}
+	}
+
 	var sb strings.Builder
 
 	// header
@@ -370,6 +388,11 @@ func (m *Model) View(focused bool) string {
 			sb.WriteString(headerStyle.Render(text))
 		}
 	}
+	if partialCol >= 0 {
+		sb.WriteString(colSep)
+		text := padCell(m.Columns[partialCol].Title, partialW)
+		sb.WriteString(dimStyle.Render(text))
+	}
 	sb.WriteByte('\n')
 
 	// separator
@@ -378,6 +401,10 @@ func (m *Model) View(focused bool) string {
 			sb.WriteString(hdrSep)
 		}
 		sb.WriteString(separatorColor.Render(strings.Repeat("─", m.Columns[i].Width)))
+	}
+	if partialCol >= 0 {
+		sb.WriteString(hdrSep)
+		sb.WriteString(separatorColor.Render(strings.Repeat("─", partialW)))
 	}
 	sb.WriteByte('\n')
 
@@ -405,6 +432,18 @@ func (m *Model) View(focused bool) string {
 			} else {
 				text := truncateCell(val, m.Columns[i].Width)
 				sb.WriteString(m.styleCell(text, r, i, focused))
+			}
+		}
+		if partialCol >= 0 {
+			sb.WriteString(colSep)
+			val := ""
+			if partialCol < len(m.Rows[r]) {
+				val = m.Rows[r][partialCol]
+			}
+			if val == NullPlaceholder {
+				sb.WriteString(dimStyle.Render(padCell("NULL", partialW)))
+			} else {
+				sb.WriteString(dimStyle.Render(truncateCell(val, partialW)))
 			}
 		}
 		if r < endRow-1 {

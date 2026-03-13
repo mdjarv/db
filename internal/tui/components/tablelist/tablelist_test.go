@@ -250,19 +250,12 @@ func TestDescribeView(t *testing.T) {
 	}
 }
 
-func TestTypeIcons(t *testing.T) {
+func TestCursorHighlight(t *testing.T) {
 	m := loadedModel()
 	v := m.View()
-	if !strings.Contains(v, "T ") {
-		t.Error("table should show T icon")
-	}
-	// navigate to the view entry
-	sendKey(m, "j")
-	sendKey(m, "j")
-	sendKey(m, "j")
-	v = m.View()
-	if !strings.Contains(v, "V ") {
-		t.Error("view should show V icon")
+	// cursor row should contain the first table name
+	if !strings.Contains(v, "users") {
+		t.Error("cursor row should show table name")
 	}
 }
 

@@ -213,24 +213,22 @@ Global flags: `--connection <name>`, `--dsn <url>`, `--host`, `--port`, `--user`
 ## TUI Layout
 
 ```
-+-------------------+------------------------------------------+
-|                   |  Query Editor                    [INSERT] |
-|  Tables           |  SELECT * FROM users             |
-|  --------         |  WHERE active = true             |
-|  > users          |  ORDER BY created_at DESC        |
-|    posts          |  LIMIT 100;                      |
-|    comments       |                                  |
-|    tags           +------------------------------------------+
-|    categories     |  Results                    1-100 of 2847 |
-|                   +------+-------+----------+--------+--------+
-|  Schema           |  id  | name  | email    | active | created|
-|  --------         +------+-------+----------+--------+--------+
-|  id: int4 PK      |  1   | alice | a@e.com  | true   | 2024.. |
-|  name: varchar     |  2   | bob   | b@e.com  | true   | 2024.. |
-|  email: varchar    |  3   | carol | c@e.com  | false  | 2024.. |
-|  active: bool      |  ..  | ..    | ..       | ..     | ..     |
-|  created: timestam +------+-------+----------+--------+--------+
-+-------------------+------------------------------------------+
-| NORMAL | connected: myapp@localhost:5432/mydb   | rows: 2847  |
-+-------------------+------------------------------------------+
+╭───────────────────╮╭──────────────────────────────────────────╮
+│ users          100 ││1 SELECT * FROM users                     │
+│ posts           42 │╰──────────────────────────────────────────╯
+│ comments        17 │╭──────────────────────────────────────────╮
+│ tags             5 ││ id   │ name  │ email    │ active │ crea… │
+│ categories       3 ││──────┼───────┼──────────┼────────┼─────  │
+│                    ││ 1    │ alice │ a@e.com  │ true   │ 2024  │
+│                    ││ 2    │ bob   │ b@e.com  │ true   │ 2024  │
+│                    ││ 3    │ carol │ c@e.com  │ false  │ 2024  │
+│                    ││ ..   │ ..    │ ..       │ ..     │ ..    │
+│                    │╰─ rows 1-100 of 2847 | 5 cols | 12ms ───╯
+╰────────────────────╯
+ NORMAL | connected: myapp@localhost:5432/mydb   | rows: 2847
 ```
+
+- Selected table highlighted with background color (no chevron)
+- Query pane auto-sizes: 1 line up to 1/4 screen
+- Result status integrated into bottom border
+- Partial rightmost column (dimmed) hints more columns exist

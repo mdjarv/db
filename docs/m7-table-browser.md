@@ -9,7 +9,7 @@ Left pane: browsable table list with schema details for the selected table. Repl
 ### Table List Component (`internal/tui/components/tablelist/`)
 
 - [ ] Filterable list of tables from `schema.Inspector`
-- [ ] Show table type icon/indicator (table, view, materialized view)
+- [x] Show table type icon/indicator (in detail view; list view omits icon to save space)
 - [ ] Show row count estimate next to table name
 - [ ] `/` to filter/search tables (fuzzy or prefix)
 - [ ] `j/k` to navigate, `Enter` to select
@@ -27,7 +27,7 @@ Left pane: browsable table list with schema details for the selected table. Repl
 
 ### Table Context Actions
 
-- [ ] `Enter` on table: `SELECT * FROM <table> LIMIT 100` into query editor + run
+- [x] `Enter` on table: `SELECT * FROM <table> LIMIT 100` into query editor + focus query pane
 - [ ] `d` on table: switch to `db describe` view (full schema detail)
 - [ ] `y` on table: yank table name to query editor at cursor
 
@@ -44,7 +44,7 @@ Left pane: browsable table list with schema details for the selected table. Repl
 | `j/k` | Navigate table list |
 | `gg/G` | Top/bottom of list |
 | `/` | Filter tables (enters insert mode for filter input) |
-| `Enter` | Quick-query selected table |
+| `Enter` | Quick-query selected table + focus query pane |
 | `d` | Describe selected table |
 | `y` | Yank table name |
 | `R` | Refresh schema |
@@ -61,7 +61,8 @@ Left pane: browsable table list with schema details for the selected table. Repl
 - Filtering narrows list as user types
 - Schema detail updates when table selection changes
 - Enter triggers query in query editor pane
-- Table type indicators visible (table vs view)
+- Selected table indicated by color highlight (no chevron)
+- Table type shown in detail view (V/M icons for views/materialized views)
 
 ## Dependencies
 

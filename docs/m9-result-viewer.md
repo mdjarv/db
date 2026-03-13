@@ -17,15 +17,15 @@ Tabular result display with virtual scrolling for large result sets. Supports na
 
 ### Result Table Component (`internal/tui/components/resultview/`)
 
-- [ ] Column headers with type indicators
+- [x] Column headers with type indicators (blue, bold)
 - [ ] Fixed header row (doesn't scroll with data)
 - [ ] Aligned columns with auto-detected widths
 - [ ] Column resize: manually adjust with keybinding
-- [ ] Horizontal scrolling for wide results
+- [x] Horizontal scrolling for wide results (partial rightmost column shown dimmed as hint)
 - [ ] Cell value truncation with ellipsis
 - [ ] NULL display: distinct style (e.g., dim italic "NULL")
 - [ ] Row cursor: highlighted current row
-- [ ] Status: "rows 1-50 of ~2847" with loading indicator
+- [x] Status integrated into bottom border: "rows 1-50 of ~2847 | N cols | duration"
 
 ### Cell Inspector
 

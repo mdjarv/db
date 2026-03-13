@@ -298,6 +298,8 @@ func (m *Model) View() string {
 	return style.Render(content)
 }
 
+var cursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57"))
+
 func typeIcon(t string) string {
 	switch t {
 	case "view":
@@ -314,18 +316,15 @@ func (m *Model) listView() string {
 	vh := m.listViewHeight()
 	end := min(m.offset+vh, len(m.filtered))
 
-	nameW := max(m.width-14, 8) // room for icon + count
+	nameW := max(m.width-10, 8) // room for padding + count
 
 	for i := m.offset; i < end; i++ {
 		t := m.filtered[i]
-		icon := typeIcon(t.Type)
 		name := truncate(t.Name, nameW)
 
-		var line string
+		line := fmt.Sprintf(" %-*s %6d", nameW, name, t.RowEstimate)
 		if i == m.cursor {
-			line = fmt.Sprintf("> %s %-*s %6d", icon, nameW, name, t.RowEstimate)
-		} else {
-			line = fmt.Sprintf("  %s %-*s %6d", icon, nameW, name, t.RowEstimate)
+			line = cursorStyle.Render(line)
 		}
 		sb.WriteString(line)
 		if i < end-1 {

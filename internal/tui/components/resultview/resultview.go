@@ -3,6 +3,7 @@ package resultview
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,7 +67,7 @@ func (m *Model) SetResult(columns []core.ResultColumn, rows [][]string, duration
 
 	m.table = table.New(cols, rows)
 	m.table.Width = max(m.width-4, 1)
-	m.table.Height = max(m.height-5, 1) // extra row for status line
+	m.table.Height = max(m.height-4, 1)
 }
 
 // SetError displays an error message.
@@ -263,11 +264,35 @@ func (m *Model) View() string {
 		return style.Render(statusStyle.Render("No results"))
 	}
 
-	content := m.table.View(m.focused)
-	status := m.statusLine()
-	full := content + "\n" + statusStyle.Render(status)
+	// render with custom bottom border containing status
+	noBottom := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderBottom(false).
+		BorderForeground(borderColor).
+		Width(innerW).
+		Height(innerH)
 
-	return style.Render(full)
+	content := m.table.View(m.focused)
+	top := noBottom.Render(content)
+
+	status := m.statusLine()
+	bottom := buildBottomBorder(status, m.width, borderColor)
+
+	return top + "\n" + bottom
+}
+
+func buildBottomBorder(status string, width int, color lipgloss.Color) string {
+	style := lipgloss.NewStyle().Foreground(color)
+	// ╰── status ─────────────╯
+	maxStatus := width - 6
+	if len(status) > maxStatus {
+		status = status[:maxStatus]
+	}
+	pad := width - len(status) - 5
+	if pad < 0 {
+		pad = 0
+	}
+	return style.Render("╰─ " + status + " " + strings.Repeat("─", pad) + "╯")
 }
 
 func (m *Model) statusLine() string {
@@ -336,7 +361,7 @@ func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.table.Width = max(w-4, 1)
-	m.table.Height = max(h-5, 1) // status line
+	m.table.Height = max(h-4, 1)
 }
 
 // SetSeparator sets the CSV separator.
