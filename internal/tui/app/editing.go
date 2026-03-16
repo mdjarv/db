@@ -28,7 +28,7 @@ func (m *Model) rowPK(row int) editor.PKValue {
 	pk := editor.PKValue{Columns: m.editPKCols}
 	for _, idx := range m.editPKIdx {
 		val := rows[row][idx]
-		if val == table.NullPlaceholder {
+		if table.IsNull(val) {
 			pk.Values = append(pk.Values, nil)
 		} else {
 			pk.Values = append(pk.Values, val)
@@ -101,12 +101,12 @@ func (m *Model) handleEditSubmit(msg editdialog.SubmitMsg) (Model, tea.Cmd) {
 	colName := m.columnName(msg.Col)
 
 	var oldAny, newAny any
-	if oldVal == table.NullPlaceholder {
+	if table.IsNull(oldVal) {
 		oldAny = nil
 	} else {
 		oldAny = oldVal
 	}
-	if newVal == table.NullPlaceholder {
+	if table.IsNull(newVal) {
 		newAny = nil
 	} else {
 		newAny = newVal
@@ -176,23 +176,28 @@ func (m *Model) handleUndo() (Model, tea.Cmd) {
 		return *m, nil
 	}
 	if last.Kind == editor.ChangeUpdate {
-		cols, _ := m.resultView.ResultData()
-		for i, c := range cols {
-			if c.Name == last.Column {
-				oldStr := ""
-				if last.OldValue == nil {
-					oldStr = table.NullPlaceholder
-				} else {
-					oldStr = fmt.Sprintf("%v", last.OldValue)
+		row := m.findRowForPK(last.PK)
+		if row >= 0 {
+			cols, _ := m.resultView.ResultData()
+			for i, c := range cols {
+				if c.Name == last.Column {
+					oldStr := ""
+					if last.OldValue == nil {
+						oldStr = table.NullPlaceholder
+					} else {
+						oldStr = fmt.Sprintf("%v", last.OldValue)
+					}
+					m.resultView.RestoreCell(row, i, oldStr)
+					break
 				}
-				m.resultView.RestoreCell(m.findRowForPK(last.PK), i, oldStr)
-				break
 			}
 		}
 	}
 	if last.Kind == editor.ChangeDelete {
 		row := m.findRowForPK(last.PK)
-		m.resultView.UnmarkDeleted(row)
+		if row >= 0 {
+			m.resultView.UnmarkDeleted(row)
+		}
 	}
 	m.updatePendingStatus()
 	m.statusBar.SetMessage("undone")
@@ -218,11 +223,14 @@ func (m *Model) handleRollback() (Model, tea.Cmd) {
 	}
 	// restore all modified cells
 	for _, c := range m.changeBuf.Changes() {
+		row := m.findRowForPK(c.PK)
+		if row < 0 {
+			continue
+		}
 		if c.Kind == editor.ChangeUpdate {
 			cols, _ := m.resultView.ResultData()
 			for i, col := range cols {
 				if col.Name == c.Column {
-					row := m.findRowForPK(c.PK)
 					oldStr := ""
 					if c.OldValue == nil {
 						oldStr = table.NullPlaceholder
@@ -235,7 +243,6 @@ func (m *Model) handleRollback() (Model, tea.Cmd) {
 			}
 		}
 		if c.Kind == editor.ChangeDelete {
-			row := m.findRowForPK(c.PK)
 			m.resultView.UnmarkDeleted(row)
 		}
 	}
@@ -330,13 +337,13 @@ type commitResultMsg struct {
 // handleCommitResult processes the result of applying changes.
 func (m *Model) handleCommitResult(msg commitResultMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
-		m.statusBar.SetMessage(fmt.Sprintf("commit failed (%d applied): %s", msg.applied, msg.err))
+		m.statusBar.SetError(fmt.Sprintf("commit failed (%d applied): %s", msg.applied, msg.err))
 		return *m, nil
 	}
 	m.changeBuf.Clear()
 	m.resultView.ClearModified()
 	m.updatePendingStatus()
-	m.statusBar.SetMessage(fmt.Sprintf("committed %d changes", msg.applied))
+	m.statusBar.SetSuccess(fmt.Sprintf("committed %d changes", msg.applied))
 
 	// re-run the query to refresh data
 	sql := m.queryEditor.Content()
@@ -469,6 +476,11 @@ func parseTableFromSQL(sql string) (string, string) {
 		return "", ""
 	}
 	rest := strings.TrimSpace(sql[idx+5:])
+
+	// skip subqueries and function calls
+	if len(rest) > 0 && rest[0] == '(' {
+		return "", ""
+	}
 
 	// take the first token after FROM
 	var tablePart string

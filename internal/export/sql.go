@@ -13,6 +13,7 @@ type sqlExporter struct {
 }
 
 func (e *sqlExporter) Export(w io.Writer, result *db.Result) error {
+	defer result.Rows.Close()
 	tableName := e.opts.TableName
 	if tableName == "" {
 		tableName = "table_name"
@@ -20,7 +21,7 @@ func (e *sqlExporter) Export(w io.Writer, result *db.Result) error {
 
 	colNames := make([]string, len(result.Columns))
 	for i, col := range result.Columns {
-		colNames[i] = col.Name
+		colNames[i] = quoteIdent(col.Name)
 	}
 	colList := strings.Join(colNames, ", ")
 
@@ -55,8 +56,12 @@ func (e *sqlExporter) Export(w io.Writer, result *db.Result) error {
 
 func writeBatch(w io.Writer, tableName, colList string, rows []string) error {
 	_, err := fmt.Fprintf(w, "INSERT INTO %s (%s) VALUES\n  %s;\n",
-		tableName, colList, strings.Join(rows, ",\n  "))
+		quoteIdent(tableName), colList, strings.Join(rows, ",\n  "))
 	return err
+}
+
+func quoteIdent(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
 func sqlLiteral(v any) string {

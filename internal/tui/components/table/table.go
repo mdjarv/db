@@ -342,8 +342,13 @@ func escapeCSV(val, sep string) string {
 
 // Rendering
 
-// NullPlaceholder is the display string for NULL values.
+// NullPlaceholder is the sentinel string for NULL database values.
+// Uses embedded null bytes which are invalid in PostgreSQL text types,
+// making collision with real data impossible for text/varchar columns.
 const NullPlaceholder = "\x00NULL\x00"
+
+// IsNull returns true if the value is the null placeholder sentinel.
+func IsNull(s string) bool { return s == NullPlaceholder }
 
 // View renders the table.
 func (m *Model) View(focused bool) string {
@@ -393,7 +398,11 @@ func (m *Model) View(focused bool) string {
 	if partialCol >= 0 {
 		sb.WriteString(colSep)
 		text := padCell(m.Columns[partialCol].Title, partialW)
-		sb.WriteString(s.Dim.Render(text))
+		if m.Visual != VisualNone && !m.isColSelected(partialCol) {
+			sb.WriteString(s.Dim.Render(text))
+		} else {
+			sb.WriteString(s.Header.Render(text))
+		}
 	}
 	sb.WriteByte('\n')
 
@@ -417,36 +426,13 @@ func (m *Model) View(focused bool) string {
 	for r := m.RowOffset; r < endRow; r++ {
 		for i := m.ColOffset; i < endCol; i++ {
 			if i > m.ColOffset {
-				sb.WriteString(colSep)
+				sb.WriteString(m.styleSep(" │ ", r, i-1, i, s))
 			}
-			val := ""
-			if i < len(m.Rows[r]) {
-				val = m.Rows[r][i]
-			}
-			isNull := val == NullPlaceholder
-			if isNull {
-				text := padCell("NULL", m.Columns[i].Width)
-				styled := m.styleCell(text, r, i, focused, s)
-				if !m.hasSelectionStyle(r, i, focused) {
-					styled = s.Null.Render(text)
-				}
-				sb.WriteString(styled)
-			} else {
-				text := truncateCell(val, m.Columns[i].Width)
-				sb.WriteString(m.styleCell(text, r, i, focused, s))
-			}
+			sb.WriteString(m.renderCell(r, i, m.Columns[i].Width, focused, s))
 		}
 		if partialCol >= 0 {
-			sb.WriteString(colSep)
-			val := ""
-			if partialCol < len(m.Rows[r]) {
-				val = m.Rows[r][partialCol]
-			}
-			if val == NullPlaceholder {
-				sb.WriteString(s.Dim.Render(padCell("NULL", partialW)))
-			} else {
-				sb.WriteString(s.Dim.Render(truncateCell(val, partialW)))
-			}
+			sb.WriteString(m.styleSep(" │ ", r, endCol-1, partialCol, s))
+			sb.WriteString(m.renderCell(r, partialCol, partialW, focused, s))
 		}
 		if r < endRow-1 {
 			sb.WriteByte('\n')
@@ -456,6 +442,42 @@ func (m *Model) View(focused bool) string {
 	return sb.String()
 }
 
+// renderCell renders a single cell value with proper styling.
+func (m *Model) renderCell(row, col, width int, focused bool, s theme.Styles) string {
+	val := ""
+	if col < len(m.Rows[row]) {
+		val = m.Rows[row][col]
+	}
+	if IsNull(val) {
+		text := padCell("NULL", width)
+		if m.hasSelectionStyle(row, col, focused) {
+			return m.styleCell(text, row, col, focused, s)
+		}
+		return s.Null.Render(text)
+	}
+	text := truncateCell(val, width)
+	return m.styleCell(text, row, col, focused, s)
+}
+
+// styleSep renders a column separator, inheriting selection style when
+// both adjacent cells are part of the visual selection.
+func (m *Model) styleSep(sep string, row, colLeft, colRight int, s theme.Styles) string {
+	switch m.Visual {
+	case VisualLine:
+		inRow := m.inRowRange(row)
+		leftSel := colLeft >= m.LineColStart && colLeft <= m.LineColEnd
+		rightSel := colRight >= m.LineColStart && colRight <= m.LineColEnd
+		if inRow && leftSel && rightSel {
+			return s.Selection.Render(sep)
+		}
+	case VisualBlock:
+		if m.inRowRange(row) && m.inBlockColRange(colLeft) && m.inBlockColRange(colRight) {
+			return s.Selection.Render(sep)
+		}
+	}
+	return s.Separator.Render(sep)
+}
+
 func (m *Model) styleCell(text string, row, col int, focused bool, s theme.Styles) string {
 	switch m.Visual {
 	case VisualLine:
@@ -463,12 +485,6 @@ func (m *Model) styleCell(text string, row, col int, focused bool, s theme.Style
 		inCol := col >= m.LineColStart && col <= m.LineColEnd
 		if inRow && inCol {
 			return s.Selection.Render(text)
-		}
-		if inCol {
-			return s.ColSelection.Render(text)
-		}
-		if inRow {
-			return s.Dim.Render(text)
 		}
 		return text
 

@@ -12,6 +12,7 @@ type jsonExporter struct {
 }
 
 func (e *jsonExporter) Export(w io.Writer, result *db.Result) error {
+	defer result.Rows.Close()
 	colNames := make([]string, len(result.Columns))
 	for i, col := range result.Columns {
 		colNames[i] = col.Name

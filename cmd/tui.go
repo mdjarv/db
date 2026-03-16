@@ -57,7 +57,11 @@ func applyTheme(cmd *cobra.Command) {
 	name, _ := cmd.Flags().GetString("theme")
 	if name == "" {
 		// fallback to config file
-		name = config.Load().Theme
+		appCfg, cfgErr := config.Load()
+		if cfgErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", cfgErr)
+		}
+		name = appCfg.Theme
 	}
 	if name == "" {
 		return // keep default

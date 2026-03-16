@@ -10,15 +10,27 @@ import (
 	"github.com/mdjarv/db/internal/tui/theme"
 )
 
+// MsgLevel controls message priority. Higher-level messages are not
+// overwritten by lower-level ones.
+type MsgLevel int
+
+// Message priority levels.
+const (
+	MsgInfo MsgLevel = iota
+	MsgWarn
+	MsgError
+)
+
 // Model is the status bar state.
 type Model struct {
-	mode    core.Mode
-	connStr string
-	message string
-	txMode  string
-	bufIdx  int
-	bufCnt  int
-	width   int
+	mode     core.Mode
+	connStr  string
+	message  string
+	msgLevel MsgLevel
+	txMode   string
+	bufIdx   int
+	bufCnt   int
+	width    int
 }
 
 // New creates a status bar.
@@ -31,8 +43,34 @@ func New() *Model {
 // SetMode updates the displayed vim mode.
 func (m *Model) SetMode(mode core.Mode) { m.mode = mode }
 
-// SetMessage sets the status message.
-func (m *Model) SetMessage(msg string) { m.message = msg }
+// SetMessage sets an info-level status message. Does not overwrite
+// error-level messages — use ClearError or SetError to replace those.
+func (m *Model) SetMessage(msg string) {
+	if m.msgLevel <= MsgInfo {
+		m.message = msg
+		m.msgLevel = MsgInfo
+	}
+}
+
+// SetError sets a sticky error message that persists until explicitly cleared.
+func (m *Model) SetError(msg string) {
+	m.message = msg
+	m.msgLevel = MsgError
+}
+
+// SetSuccess sets a success message, clearing any error.
+func (m *Model) SetSuccess(msg string) {
+	m.message = msg
+	m.msgLevel = MsgInfo
+}
+
+// ClearError clears any sticky error message.
+func (m *Model) ClearError() {
+	if m.msgLevel >= MsgError {
+		m.message = ""
+		m.msgLevel = MsgInfo
+	}
+}
 
 // SetWidth sets the render width.
 func (m *Model) SetWidth(w int) { m.width = w }
@@ -86,7 +124,11 @@ func (m *Model) View() string {
 	rightW := lipgloss.Width(right)
 	msgW := max(m.width-leftW-rightW, 0)
 
-	msg := s.StatusBarFG.Width(msgW).Render(m.message)
+	msgStyle := s.StatusBarFG.Width(msgW)
+	if m.msgLevel >= MsgError {
+		msgStyle = s.Error.Width(msgW)
+	}
+	msg := msgStyle.Render(m.message)
 
 	bar := lipgloss.NewStyle().
 		Width(m.width).

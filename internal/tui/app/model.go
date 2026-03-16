@@ -63,7 +63,7 @@ type Model struct {
 	leftRatio float64
 	showHelp  bool
 	ready     bool
-	pending   string // for multi-key sequences (gt, gT)
+	keySeq    core.KeySeq
 }
 
 // New creates the app model with all sub-components.
@@ -116,8 +116,6 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles all messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -156,9 +154,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case core.SchemaLoadedMsg:
 		cmd := m.tableList.Update(msg)
 		if msg.Err != nil {
-			m.statusBar.SetMessage("schema load failed: " + msg.Err.Error())
+			m.statusBar.SetError("schema load failed: " + msg.Err.Error())
 		} else {
-			m.statusBar.SetMessage(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
+			m.statusBar.SetSuccess(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
 		}
 		return m, cmd
 
@@ -193,7 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultView.ClearModified()
 		m.changeBuf.Clear()
 		m.panes.SetActive(pane.ResultView)
-		m.statusBar.SetMessage(fmt.Sprintf("Query OK: %d rows in %s", len(msg.Rows), msg.Duration))
+		m.statusBar.SetSuccess(fmt.Sprintf("Query OK: %d rows in %s", len(msg.Rows), msg.Duration))
 		// sync result into active buffer
 		buf := m.buffers.Active()
 		buf.Columns = msg.Columns
@@ -214,7 +212,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.QueryErrorMsg:
 		m.resultView.SetError(msg.Err)
-		m.statusBar.SetMessage("Query error: " + msg.Err.Error())
+		m.statusBar.SetError("Query error: " + msg.Err.Error())
 		buf := m.buffers.Active()
 		buf.HasData = false
 		buf.ErrMsg = msg.Err.Error()
@@ -225,9 +223,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case exportResultMsg:
 		if msg.err != nil {
-			m.statusBar.SetMessage("export failed: " + msg.err.Error())
+			m.statusBar.SetError("export failed: " + msg.err.Error())
 		} else {
-			m.statusBar.SetMessage("exported to " + msg.path)
+			m.statusBar.SetSuccess("exported to " + msg.path)
 		}
 		return m, nil
 
@@ -268,100 +266,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case yankResultMsg:
 		if msg.err != nil {
-			m.statusBar.SetMessage("yank failed: " + msg.err.Error())
+			m.statusBar.SetError("yank failed: " + msg.err.Error())
 		} else {
-			m.statusBar.SetMessage("yanked to clipboard")
+			m.statusBar.SetSuccess("yanked to clipboard")
 		}
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.dialog.IsActive() {
-			cmd := m.dialog.Update(msg)
-			return m, cmd
-		}
-
-		if m.commandBar.Active() {
-			cmd := m.commandBar.Update(msg)
-			return m, cmd
-		}
-
-		if m.showHelp {
-			m.showHelp = false
-			return m, nil
-		}
-
-		if m.editDialog.IsActive() {
-			cmd := m.editDialog.Update(msg)
-			return m, cmd
-		}
-
-		if m.mode.IsVisual() {
-			if msg.String() == "esc" {
-				m.resultView.ExitVisual()
-				m.mode = core.ModeNormal
-				m.statusBar.SetMode(m.mode)
-				return m, nil
-			}
-			cmd := m.resultView.Update(msg)
-			return m, cmd
-		}
-
-		// M12: multi-key buffer switching (gt/gT)
-		if m.mode == core.ModeNormal && m.pending == "g" {
-			m.pending = ""
-			switch msg.String() {
-			case "t":
-				return m.handleAction(ActionBufferNext)
-			case "T":
-				return m.handleAction(ActionBufferPrev)
-			default:
-				// not a buffer key — forward "g" then current key to pane
-				active := m.panes.Active()
-				if active != nil {
-					gMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}
-					active.Update(gMsg)
-					_, cmd := active.Update(msg)
-					cmds = append(cmds, cmd)
-				}
-				m.recalcLayout()
-				return m, tea.Batch(cmds...)
-			}
-		}
-		if m.mode == core.ModeNormal && msg.String() == "g" {
-			m.pending = "g"
-			return m, nil
-		}
-
-		// v/V on query editor → editor-local visual mode, not result table visual
-		if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.QueryEditor {
-			if k := msg.String(); k == "v" || k == "V" {
-				cmd := m.queryEditor.Update(msg)
-				m.recalcLayout()
-				return m, cmd
-			}
-		}
-
-		action := MatchGlobal(msg, m.mode)
-		if action != ActionNone {
-			return m.handleAction(action)
-		}
-
-		// M8: forward keys to active pane in normal mode,
-		// or to queryeditor in insert mode
-		active := m.panes.Active()
-		if active != nil {
-			if m.mode == core.ModeNormal {
-				_, cmd := active.Update(msg)
-				cmds = append(cmds, cmd)
-			} else if m.mode == core.ModeInsert && m.panes.ActiveID() == pane.QueryEditor {
-				cmd := m.queryEditor.Update(msg)
-				cmds = append(cmds, cmd)
-			}
-		}
-		m.recalcLayout()
+		return m.handleKeyInput(msg)
 	}
 
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
@@ -639,93 +554,89 @@ func (m *Model) exportResult(format, path string) tea.Cmd {
 	}
 }
 
-func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
-	m.mode = core.ModeNormal
-	m.statusBar.SetMode(m.mode)
+// handleKeyInput processes keyboard input with modal dispatch.
+func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// overlay UIs get first priority
+	if m.dialog.IsActive() {
+		return m, m.dialog.Update(msg)
+	}
+	if m.commandBar.Active() {
+		return m, m.commandBar.Update(msg)
+	}
+	if m.showHelp {
+		m.showHelp = false
+		return m, nil
+	}
+	if m.editDialog.IsActive() {
+		return m, m.editDialog.Update(msg)
+	}
 
-	switch msg.Command {
-	case "q", "quit":
-		return m, tea.Quit
-	case "w":
-		sql := m.queryEditor.Content()
-		return m, func() tea.Msg {
-			return core.QuerySubmittedMsg{SQL: sql}
-		}
-	case "clear":
-		m.queryEditor.SetContent("")
-		m.recalcLayout()
-		m.statusBar.SetMessage("buffer cleared")
-	case "set":
-		m.handleSetCommand(msg.Args)
-	case "commit":
-		result, cmd := m.handleCommit()
-		return result, cmd
-	case "rollback":
-		result, cmd := m.handleRollback()
-		return result, cmd
-	case "changes":
-		result, cmd := m.handleChanges()
-		return result, cmd
-	case "export":
-		return m, m.parseExport(msg.Args)
-	case "new", "enew":
-		m.saveBufferState()
-		if !m.buffers.New() {
-			m.statusBar.SetMessage("max buffers reached")
+	// visual mode
+	if m.mode.IsVisual() {
+		if msg.String() == "esc" {
+			m.resultView.ExitVisual()
+			m.mode = core.ModeNormal
+			m.statusBar.SetMode(m.mode)
 			return m, nil
 		}
-		m.restoreBufferState()
-		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
-	case "bd":
-		if !m.buffers.Close() {
-			m.statusBar.SetMessage("cannot close last buffer")
-			return m, nil
-		}
-		m.restoreBufferState()
-		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
-	case "bn":
-		m.saveBufferState()
-		m.buffers.Next()
-		m.restoreBufferState()
-		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
-	case "bp":
-		m.saveBufferState()
-		m.buffers.Prev()
-		m.restoreBufferState()
-		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
-	case "b":
-		n := 0
-		if _, err := fmt.Sscanf(msg.Args, "%d", &n); err != nil {
-			m.statusBar.SetMessage("invalid buffer number")
-			return m, nil
-		}
-		m.saveBufferState()
-		if !m.buffers.SwitchTo(n) {
-			m.statusBar.SetMessage("invalid buffer number")
-			return m, nil
-		}
-		m.restoreBufferState()
-		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
-	case "ls", "buffers":
-		m.saveBufferState()
-		m.statusBar.SetMessage(m.buffers.List())
-	case "theme":
-		if msg.Args == "" {
-			names := theme.Available()
-			m.statusBar.SetMessage("themes: " + strings.Join(names, ", "))
-		} else {
-			t, err := theme.Resolve(msg.Args)
-			if err != nil {
-				m.statusBar.SetMessage("unknown theme: " + msg.Args)
-			} else {
-				theme.Set(t)
-				m.statusBar.SetMessage("theme: " + t.Name)
+		return m, m.resultView.Update(msg)
+	}
+
+	// multi-key buffer switching (gt/gT)
+	if m.mode == core.ModeNormal && m.keySeq.Active() {
+		first := m.keySeq.Consume()
+		if first == "g" {
+			switch msg.String() {
+			case "t":
+				return m.handleAction(ActionBufferNext)
+			case "T":
+				return m.handleAction(ActionBufferPrev)
+			default:
+				// not a buffer key — forward "g" then current key to pane
+				active := m.panes.Active()
+				if active != nil {
+					gMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}
+					active.Update(gMsg)
+					_, cmd := active.Update(msg)
+					m.recalcLayout()
+					return m, cmd
+				}
+				return m, nil
 			}
 		}
-	default:
-		m.statusBar.SetMessage("unknown command: " + msg.Command)
 	}
-	return m, nil
+	if m.mode == core.ModeNormal && msg.String() == "g" {
+		m.keySeq.Start("g")
+		return m, nil
+	}
+
+	// v/V on query editor → editor-local visual mode, not result table visual
+	if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.QueryEditor {
+		if k := msg.String(); k == "v" || k == "V" {
+			cmd := m.queryEditor.Update(msg)
+			m.recalcLayout()
+			return m, cmd
+		}
+	}
+
+	// global keybindings
+	if action := MatchGlobal(msg, m.mode); action != ActionNone {
+		return m.handleAction(action)
+	}
+
+	// forward to active pane
+	active := m.panes.Active()
+	if active == nil {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	if m.mode == core.ModeNormal {
+		_, cmd = active.Update(msg)
+	} else if m.mode == core.ModeInsert && m.panes.ActiveID() == pane.QueryEditor {
+		cmd = m.queryEditor.Update(msg)
+	}
+	m.recalcLayout()
+	return m, cmd
 }
 
 func (m *Model) recalcLayout() {
@@ -928,7 +839,7 @@ func (it *sliceRowIterator) Values() ([]any, error) {
 	row := it.data[it.pos-1]
 	vals := make([]any, len(row))
 	for i, v := range row {
-		if v == table.NullPlaceholder {
+		if table.IsNull(v) {
 			vals[i] = nil
 		} else {
 			vals[i] = v

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -59,6 +60,7 @@ type TypeMap struct {
 	enumValues      map[uint32][]string
 	compositeFields map[uint32][]CompositeField
 	arrayElemOID    map[uint32]uint32 // array OID → element OID
+	Warnings        []string          // scan errors during loading
 }
 
 // NewTypeMap creates a TypeMap with only hardcoded entries (fallback).
@@ -108,6 +110,7 @@ WHERE t.typnamespace NOT IN (
 		var typname, category string
 		var elemName *string
 		if err := rows.Scan(&oid, &typname, &category, &typelem, &elemName); err != nil {
+			tm.Warnings = append(tm.Warnings, fmt.Sprintf("types: scan: %v", err))
 			continue
 		}
 		if category == "A" && elemName != nil {
@@ -136,6 +139,7 @@ ORDER BY e.enumtypid, e.enumsortorder`
 		var oid uint32
 		var label string
 		if err := rows.Scan(&oid, &label); err != nil {
+			tm.Warnings = append(tm.Warnings, fmt.Sprintf("enums: scan: %v", err))
 			continue
 		}
 		tm.enumValues[oid] = append(tm.enumValues[oid], label)
@@ -168,6 +172,7 @@ ORDER BY ct.oid, a.attnum`
 		var typeOID, atttypid uint32
 		var attname, typname string
 		if err := rows.Scan(&typeOID, &attname, &typname, &atttypid); err != nil {
+			tm.Warnings = append(tm.Warnings, fmt.Sprintf("composites: scan: %v", err))
 			continue
 		}
 		fieldType := typname

@@ -17,13 +17,13 @@ func TestAllBuiltinsParse(t *testing.T) {
 	}
 }
 
-func TestDefaultDarkMatchesOriginal(t *testing.T) {
+func TestDefaultDarkCatppuccinMocha(t *testing.T) {
 	th := DefaultDark()
-	if th.Colors.Chrome.Border != "240" {
-		t.Errorf("border = %q, want 240", th.Colors.Chrome.Border)
+	if th.Colors.Chrome.Border != "#585b70" {
+		t.Errorf("border = %q, want #585b70 (surface2)", th.Colors.Chrome.Border)
 	}
-	if th.Colors.UI.Cursor != "57" {
-		t.Errorf("cursor = %q, want 57", th.Colors.UI.Cursor)
+	if th.Colors.UI.Cursor != "#89b4fa" {
+		t.Errorf("cursor = %q, want #89b4fa (blue)", th.Colors.UI.Cursor)
 	}
 }
 
@@ -95,12 +95,12 @@ colors:
 	if th.Colors.Chrome.Border != "#111111" {
 		t.Errorf("border = %q, want #111111", th.Colors.Chrome.Border)
 	}
-	// default field preserved
-	if th.Colors.Chrome.BorderFocused != "62" {
-		t.Errorf("border_focused = %q, want 62 (default)", th.Colors.Chrome.BorderFocused)
+	// default field preserved (catppuccin mocha values)
+	if th.Colors.Chrome.BorderFocused != "#89b4fa" {
+		t.Errorf("border_focused = %q, want #89b4fa (default)", th.Colors.Chrome.BorderFocused)
 	}
-	if th.Colors.UI.Cursor != "57" {
-		t.Errorf("cursor = %q, want 57 (default)", th.Colors.UI.Cursor)
+	if th.Colors.UI.Cursor != "#89b4fa" {
+		t.Errorf("cursor = %q, want #89b4fa (default)", th.Colors.UI.Cursor)
 	}
 }
 

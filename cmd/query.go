@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/mdjarv/db/internal/db"
+	"github.com/mdjarv/db/internal/export"
 	"github.com/mdjarv/db/internal/query"
 )
 
@@ -29,7 +29,7 @@ var (
 
 func init() {
 	queryCmd.Flags().StringVarP(&queryFile, "file", "f", "", "read SQL from file")
-	queryCmd.Flags().StringVarP(&queryFormat, "format", "F", "table", "output format (table)")
+	queryCmd.Flags().StringVarP(&queryFormat, "format", "F", "table", "output format (table, csv, json, sql)")
 	queryCmd.Flags().BoolVar(&queryNoHeader, "no-header", false, "suppress column headers")
 	rootCmd.AddCommand(queryCmd)
 }
@@ -95,62 +95,26 @@ func resolveSQL(args []string) (string, error) {
 }
 
 func printResult(result *db.Result, format string, noHeader bool) error {
-	if format != "table" {
-		return fmt.Errorf("format %q not yet supported", format)
+	defer result.Rows.Close()
+
+	var efmt export.Format
+	switch format {
+	case "table":
+		efmt = export.FormatTable
+	case "csv":
+		efmt = export.FormatCSV
+	case "json":
+		efmt = export.FormatJSON
+	case "sql":
+		efmt = export.FormatSQL
+	default:
+		return fmt.Errorf("unknown format: %s (table, csv, json, sql)", format)
 	}
 
-	var rows [][]any
-	for result.Rows.Next() {
-		vals, err := result.Rows.Values()
-		if err != nil {
-			return fmt.Errorf("read row: %w", err)
-		}
-		row := make([]any, len(vals))
-		copy(row, vals)
-		rows = append(rows, row)
-	}
-	result.Rows.Close()
-	if err := result.Rows.Err(); err != nil {
-		return fmt.Errorf("rows: %w", err)
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-
-	if !noHeader {
-		for i, col := range result.Columns {
-			if i > 0 {
-				if _, err := fmt.Fprint(w, "\t"); err != nil {
-					return err
-				}
-			}
-			if _, err := fmt.Fprint(w, col.Name); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
-	}
-
-	for _, row := range rows {
-		for i, val := range row {
-			if i > 0 {
-				if _, err := fmt.Fprint(w, "\t"); err != nil {
-					return err
-				}
-			}
-			s := "NULL"
-			if val != nil {
-				s = fmt.Sprintf("%v", val)
-			}
-			if _, err := fmt.Fprint(w, s); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
-	}
-
-	return w.Flush()
+	exp := export.NewExporter(efmt, export.Options{
+		NoHeader:    noHeader,
+		NullString:  "NULL",
+		MaxColWidth: 50,
+	})
+	return exp.Export(os.Stdout, result)
 }

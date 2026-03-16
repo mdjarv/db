@@ -12,6 +12,7 @@ type csvExporter struct {
 }
 
 func (e *csvExporter) Export(w io.Writer, result *db.Result) error {
+	defer result.Rows.Close()
 	cw := csv.NewWriter(w)
 	if e.opts.Delimiter != 0 {
 		cw.Comma = e.opts.Delimiter

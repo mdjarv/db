@@ -43,7 +43,7 @@ type Model struct {
 	undoStack []snapshot
 	redoStack []snapshot
 
-	pending string // for multi-key sequences like "dd", "yy"
+	keySeq core.KeySeq
 
 	visual        visualKind
 	anchorX       int
@@ -119,7 +119,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case core.ModeChangedMsg:
 		m.mode = msg.Mode
-		m.pending = ""
+		m.keySeq.Clear()
 		m.visual = visualNone // esc or mode change clears visual
 	case tea.KeyMsg:
 		if m.mode == core.ModeInsert {
@@ -137,26 +137,17 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 	key := msg.String()
 
 	// handle pending multi-key sequences
-	if m.pending == "d" {
-		m.pending = ""
-		if key == "d" {
+	if m.keySeq.Active() {
+		first := m.keySeq.Consume()
+		switch {
+		case first == "d" && key == "d":
 			return m.deleteLine()
-		}
-		return nil
-	}
-	if m.pending == "g" {
-		m.pending = ""
-		if key == "g" {
+		case first == "g" && key == "g":
 			m.cursorY = 0
 			m.cursorX = 0
 			m.offset = 0
 			return nil
-		}
-		return nil
-	}
-	if m.pending == "y" {
-		m.pending = ""
-		if key == "y" {
+		case first == "y" && key == "y":
 			return m.yankLine()
 		}
 		return nil
@@ -196,11 +187,11 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 	case "b":
 		m.wordBackward()
 	case "d":
-		m.pending = "d"
+		m.keySeq.Start("d")
 	case "D":
 		m.deleteToEnd()
 	case "g":
-		m.pending = "g"
+		m.keySeq.Start("g")
 	case "G":
 		m.cursorY = len(m.lines) - 1
 		m.clampX()
@@ -221,7 +212,7 @@ func (m *Model) normalUpdate(msg tea.KeyMsg) tea.Cmd {
 		m.anchorX = 0
 		m.anchorY = m.cursorY
 	case "y":
-		m.pending = "y"
+		m.keySeq.Start("y")
 	case "Y":
 		return m.yankLine()
 	case "p":

@@ -31,8 +31,7 @@ type Model struct {
 	errMsg   string
 	hasData  bool
 
-	// operator pending (for dR, oR sequences)
-	pendingOp string
+	keySeq core.KeySeq
 }
 
 // New creates a result view with empty state.
@@ -131,9 +130,8 @@ func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 	key := km.String()
 
 	// handle pending operator
-	if m.pendingOp != "" {
-		op := m.pendingOp
-		m.pendingOp = ""
+	if m.keySeq.Active() {
+		op := m.keySeq.Consume()
 		if key == "R" {
 			switch op {
 			case "d":
@@ -180,9 +178,9 @@ func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 		content := m.table.YankRow(m.separator)
 		return func() tea.Msg { return core.YankMsg{Content: content} }
 	case "d":
-		m.pendingOp = "d"
+		m.keySeq.Start("d")
 	case "o":
-		m.pendingOp = "o"
+		m.keySeq.Start("o")
 	case "ctrl+z":
 		return func() tea.Msg { return core.UndoMsg{} }
 	}
@@ -199,7 +197,7 @@ func (m *Model) startEdit() tea.Cmd {
 		return nil
 	}
 	val := m.table.Rows[row][col]
-	if val == table.NullPlaceholder {
+	if table.IsNull(val) {
 		val = ""
 	}
 	colName := ""
@@ -251,7 +249,7 @@ func (m *Model) ClearModified() {
 
 // RestoreCell restores the original value of a cell.
 func (m *Model) RestoreCell(row, col int, value string) {
-	if row < len(m.table.Rows) && col < len(m.table.Rows[row]) {
+	if row >= 0 && row < len(m.table.Rows) && col < len(m.table.Rows[row]) {
 		m.table.Rows[row][col] = value
 	}
 	m.UnmarkModified(row, col)
@@ -401,7 +399,7 @@ func autoWidth(name, typeName string, rows [][]string, colIdx int) int {
 	for i := range sampleSize {
 		if colIdx < len(rows[i]) {
 			val := rows[i][colIdx]
-			if val == table.NullPlaceholder {
+			if table.IsNull(val) {
 				if 4 > w {
 					w = 4
 				}

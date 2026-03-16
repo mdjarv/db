@@ -23,6 +23,7 @@ type tableExporter struct {
 }
 
 func (e *tableExporter) Export(w io.Writer, result *db.Result) error {
+	defer result.Rows.Close()
 	cols := result.Columns
 	ncols := len(cols)
 

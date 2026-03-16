@@ -1,129 +1,129 @@
 package theme
 
-// DefaultDark returns the default dark theme matching the original hardcoded styles.
+// DefaultDark returns the default dark theme based on Catppuccin Mocha.
 func DefaultDark() *Theme {
 	t := &Theme{
 		Name: "default-dark",
 		Colors: Colors{
 			Chrome: ChromeColors{
-				Border:         "240",
-				BorderFocused:  "62",
-				BorderVisual:   "208",
-				StatusBarBG:    "236",
-				StatusBarFG:    "252",
-				ModeNormalBG:   "62",
-				ModeNormalFG:   "15",
-				ModeInsertBG:   "28",
-				ModeInsertFG:   "15",
-				ModeCommandBG:  "166",
-				ModeCommandFG:  "15",
-				ConnectedFG:    "78",
-				DisconnectedFG: "196",
-				TxFG:           "245",
-				PromptFG:       "166",
+				Border:         "#585b70", // surface2
+				BorderFocused:  "#89b4fa", // blue
+				BorderVisual:   "#fab387", // peach
+				StatusBarBG:    "#1e1e2e", // base
+				StatusBarFG:    "#cdd6f4", // text
+				ModeNormalBG:   "#89b4fa", // blue
+				ModeNormalFG:   "#1e1e2e", // base
+				ModeInsertBG:   "#a6e3a1", // green
+				ModeInsertFG:   "#1e1e2e", // base
+				ModeCommandBG:  "#fab387", // peach
+				ModeCommandFG:  "#1e1e2e", // base
+				ConnectedFG:    "#a6e3a1", // green
+				DisconnectedFG: "#f38ba8", // red
+				TxFG:           "#6c7086", // overlay0
+				PromptFG:       "#fab387", // peach
 			},
 			Syntax: SyntaxColors{
-				Keyword:  "39",
-				String:   "142",
-				Number:   "208",
-				Comment:  "240",
-				Type:     "37",
-				Function: "178",
-				Operator: "245",
+				Keyword:  "#cba6f7", // mauve
+				String:   "#a6e3a1", // green
+				Number:   "#fab387", // peach
+				Comment:  "#6c7086", // overlay0
+				Type:     "#89dceb", // sky
+				Function: "#f9e2af", // yellow
+				Operator: "#94e2d5", // teal
 			},
 			Data: DataColors{
-				Null:    "240",
-				Boolean: "37",
-				Number:  "208",
-				String:  "142",
-				Date:    "178",
+				Null:    "#6c7086", // overlay0
+				Boolean: "#89dceb", // sky
+				Number:  "#fab387", // peach
+				String:  "#a6e3a1", // green
+				Date:    "#f9e2af", // yellow
 			},
 			UI: UIColors{
-				Cursor:         "57",
-				CursorFG:       "229",
-				CursorRow:      "255",
-				Selection:      "208",
-				SelectionFG:    "229",
-				ColSelection:   "94",
-				ColSelectionFG: "223",
-				Dim:            "240",
-				Header:         "75",
-				Separator:      "240",
-				Error:          "196",
-				Warning:        "208",
-				Success:        "78",
-				InsertCursor:   "45",
-				EditorSelect:   "57",
-				EditorSelectFG: "229",
-				Gutter:         "240",
-				Modified:       "178",
-				ModifiedFG:     "232",
-				Deleted:        "240",
+				Cursor:         "#89b4fa", // blue
+				CursorFG:       "#1e1e2e", // base
+				CursorRow:      "#cdd6f4", // text
+				Selection:      "#f5c2e7", // pink
+				SelectionFG:    "#1e1e2e", // base
+				ColSelection:   "#313244", // surface0
+				ColSelectionFG: "#f9e2af", // yellow
+				Dim:            "#585b70", // surface2
+				Header:         "#89b4fa", // blue
+				Separator:      "#45475a", // surface1
+				Error:          "#f38ba8", // red
+				Warning:        "#fab387", // peach
+				Success:        "#a6e3a1", // green
+				InsertCursor:   "#94e2d5", // teal
+				EditorSelect:   "#45475a", // surface1
+				EditorSelectFG: "#cdd6f4", // text
+				Gutter:         "#585b70", // surface2
+				Modified:       "#f9e2af", // yellow
+				ModifiedFG:     "#1e1e2e", // base
+				Deleted:        "#585b70", // surface2
 			},
 		},
 	}
 	return t.Build()
 }
 
-// DefaultLight returns the default light theme.
+// DefaultLight returns the default light theme based on Catppuccin Latte.
 func DefaultLight() *Theme {
 	t := &Theme{
 		Name: "default-light",
 		Colors: Colors{
 			Chrome: ChromeColors{
-				Border:         "#b0b0b0",
-				BorderFocused:  "#5f5faf",
-				BorderVisual:   "#d75f00",
-				StatusBarBG:    "#e4e4e4",
-				StatusBarFG:    "#3a3a3a",
-				ModeNormalBG:   "#5f5faf",
-				ModeNormalFG:   "#ffffff",
-				ModeInsertBG:   "#00875f",
-				ModeInsertFG:   "#ffffff",
-				ModeCommandBG:  "#d75f00",
-				ModeCommandFG:  "#ffffff",
-				ConnectedFG:    "#00875f",
-				DisconnectedFG: "#d70000",
-				TxFG:           "#808080",
-				PromptFG:       "#d75f00",
+				Border:         "#9ca0b0", // overlay0
+				BorderFocused:  "#1e66f5", // blue
+				BorderVisual:   "#fe640b", // peach
+				StatusBarBG:    "#eff1f5", // base
+				StatusBarFG:    "#4c4f69", // text
+				ModeNormalBG:   "#1e66f5", // blue
+				ModeNormalFG:   "#eff1f5", // base
+				ModeInsertBG:   "#40a02b", // green
+				ModeInsertFG:   "#eff1f5", // base
+				ModeCommandBG:  "#fe640b", // peach
+				ModeCommandFG:  "#eff1f5", // base
+				ConnectedFG:    "#40a02b", // green
+				DisconnectedFG: "#d20f39", // red
+				TxFG:           "#8c8fa1", // overlay1
+				PromptFG:       "#fe640b", // peach
 			},
 			Syntax: SyntaxColors{
-				Keyword:  "#0000d7",
-				String:   "#008700",
-				Number:   "#af5f00",
-				Comment:  "#808080",
-				Type:     "#005f87",
-				Function: "#875f00",
-				Operator: "#585858",
+				Keyword:  "#8839ef", // mauve
+				String:   "#40a02b", // green
+				Number:   "#fe640b", // peach
+				Comment:  "#9ca0b0", // overlay0
+				Type:     "#04a5e5", // sky
+				Function: "#df8e1d", // yellow
+				Operator: "#179299", // teal
 			},
 			Data: DataColors{
-				Null:    "#808080",
-				Boolean: "#005f87",
-				Number:  "#af5f00",
-				String:  "#008700",
-				Date:    "#875f00",
+				Null:    "#9ca0b0", // overlay0
+				Boolean: "#04a5e5", // sky
+				Number:  "#fe640b", // peach
+				String:  "#40a02b", // green
+				Date:    "#df8e1d", // yellow
 			},
 			UI: UIColors{
-				Cursor:         "#5f5faf",
-				CursorFG:       "#ffffff",
-				CursorRow:      "#1c1c1c",
-				Selection:      "#d75f00",
-				SelectionFG:    "#ffffff",
-				ColSelection:   "#d7af5f",
-				ColSelectionFG: "#1c1c1c",
-				Dim:            "#b0b0b0",
-				Header:         "#5f5faf",
-				Separator:      "#b0b0b0",
-				Error:          "#d70000",
-				Warning:        "#d75f00",
-				Success:        "#00875f",
-				InsertCursor:   "#005f87",
-				EditorSelect:   "#5f5faf",
-				EditorSelectFG: "#ffffff",
-				Gutter:         "#b0b0b0",
-				Modified:       "#d7af5f",
-				ModifiedFG:     "#1c1c1c",
-				Deleted:        "#b0b0b0",
+				Cursor:         "#1e66f5", // blue
+				CursorFG:       "#eff1f5", // base
+				CursorRow:      "#4c4f69", // text
+				Selection:      "#ea76cb", // pink
+				SelectionFG:    "#eff1f5", // base
+				ColSelection:   "#e6e9ef", // mantle
+				ColSelectionFG: "#df8e1d", // yellow
+				Dim:            "#9ca0b0", // overlay0
+				Header:         "#1e66f5", // blue
+				Separator:      "#bcc0cc", // surface1
+				Error:          "#d20f39", // red
+				Warning:        "#fe640b", // peach
+				Success:        "#40a02b", // green
+				InsertCursor:   "#179299", // teal
+				EditorSelect:   "#ccd0da", // surface0
+				EditorSelectFG: "#4c4f69", // text
+				Gutter:         "#9ca0b0", // overlay0
+				Modified:       "#df8e1d", // yellow
+				ModifiedFG:     "#eff1f5", // base
+				Deleted:        "#9ca0b0", // overlay0
 			},
 		},
 	}

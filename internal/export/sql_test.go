@@ -18,7 +18,7 @@ func TestSQLBasic(t *testing.T) {
 	if err := exp.Export(&buf, r); err != nil {
 		t.Fatal(err)
 	}
-	want := "INSERT INTO users (id, name) VALUES\n  (1, 'alice'),\n  (2, 'bob');\n"
+	want := "INSERT INTO \"users\" (\"id\", \"name\") VALUES\n  (1, 'alice'),\n  (2, 'bob');\n"
 	if buf.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
 	}
