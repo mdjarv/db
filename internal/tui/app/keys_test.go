@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/pane"
 )
 
 func keyMsg(s string) tea.KeyMsg {
@@ -84,13 +85,34 @@ func TestMatchGlobal_InsertMode(t *testing.T) {
 }
 
 func TestHelpText(t *testing.T) {
-	text := HelpText()
+	// TableList pane should show Table List section
+	text := HelpText(pane.TableList)
 	if text == "" {
-		t.Error("HelpText() returned empty string")
+		t.Error("HelpText(TableList) returned empty string")
 	}
-	for _, want := range []string{"Navigation:", "Modes:", "Table List:", "Results:", "Commands:"} {
+	for _, want := range []string{"Navigation:", "Modes:", "Table List:"} {
 		if !strings.Contains(text, want) {
-			t.Errorf("HelpText() missing section %q", want)
+			t.Errorf("HelpText(TableList) missing section %q", want)
 		}
+	}
+	if strings.Contains(text, "Results:") {
+		t.Error("HelpText(TableList) should not contain Results section")
+	}
+
+	// ResultView pane should show Results section
+	text = HelpText(pane.ResultView)
+	for _, want := range []string{"Navigation:", "Results:", "Visual:", "Editing:"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("HelpText(ResultView) missing section %q", want)
+		}
+	}
+	if strings.Contains(text, "Table List:") {
+		t.Error("HelpText(ResultView) should not contain Table List section")
+	}
+
+	// QueryEditor pane should show Query Editor section
+	text = HelpText(pane.QueryEditor)
+	if !strings.Contains(text, "Query Editor:") {
+		t.Error("HelpText(QueryEditor) missing Query Editor section")
 	}
 }

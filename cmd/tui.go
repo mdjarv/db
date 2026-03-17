@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mdjarv/db/internal/config"
+	"github.com/mdjarv/db/internal/conn"
 	"github.com/mdjarv/db/internal/db"
 	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/app"
@@ -28,24 +29,37 @@ func init() {
 func runTUI(cmd *cobra.Command, _ []string) error {
 	applyTheme(cmd)
 
-	cfg, err := resolveConnection(cmd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "connection error: %v\n", err)
-		return err
-	}
-	conn, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "connection error: %v\n", err)
-		return err
-	}
-	defer func() { _ = conn.Close(cmd.Context()) }()
+	stores := connectionStores()
+	creds := conn.NewCredentialStore(conn.OSKeyring{})
+	gitRoot := config.GitRoot()
 
-	connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
-	insp := schema.NewPostgresInspector(conn)
-	m := app.NewWithConn(conn, insp, connInfo)
+	cfg, err := resolveConnection(cmd)
+
+	var m app.Model
+	if err == nil {
+		c, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "connection error: %v\n", err)
+			return err
+		}
+		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
+		insp := schema.NewPostgresInspector(c)
+		m = app.NewWithOpts(app.Options{
+			Conn: c, Inspector: insp, ConnInfo: connInfo,
+			Stores: stores, Creds: creds, GitRoot: gitRoot,
+		})
+	} else {
+		m = app.NewWithOpts(app.Options{
+			Stores: stores, Creds: creds, GitRoot: gitRoot,
+		})
+	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	result, err := p.Run()
+	if final, ok := result.(app.Model); ok {
+		final.Cleanup()
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return err
 	}

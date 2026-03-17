@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mdjarv/db/internal/tui/core"
+	"github.com/mdjarv/db/internal/tui/pane"
 )
 
 // Action identifies a keybinding action.
@@ -34,6 +35,7 @@ const (
 	ActionModeVisualBlock
 	ActionBufferNext
 	ActionBufferPrev
+	ActionConnSelector
 )
 
 // Binding maps a key to an action in a specific mode.
@@ -65,6 +67,7 @@ var globalBindings = []Binding{
 	{Action: ActionModeVisualBlock, Key: "v", Desc: "visual block mode", Mode: core.ModeNormal},
 	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualLine},
 	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualBlock},
+	{Action: ActionConnSelector, Key: "ctrl+o", Desc: "switch connection", Mode: core.ModeNormal},
 }
 
 // MatchGlobal returns the action matching a key in the given mode.
@@ -78,77 +81,85 @@ func MatchGlobal(msg tea.KeyMsg, mode core.Mode) Action {
 	return ActionNone
 }
 
-// HelpText returns formatted keybinding help.
-func HelpText() string {
+// HelpText returns formatted keybinding help scoped to the active pane.
+func HelpText(activePane pane.ID) string {
 	var sb strings.Builder
-	sb.WriteString("Keybindings:\n\n")
+	sb.WriteString("Keybindings\n")
 
-	sb.WriteString("Navigation:\n")
-	sb.WriteString("  ctrl+h/j/k/l - focus left/down/up/right\n")
-	sb.WriteString("  tab/shift+tab - cycle panes\n")
-	sb.WriteString("  1/2/3         - jump to pane\n")
-	sb.WriteString("  +/-           - grow/shrink pane\n")
+	// Global section — always shown
+	sb.WriteString("\nNavigation:\n")
+	sb.WriteString("  ctrl+h/j/k/l  focus left/down/up/right\n")
+	sb.WriteString("  tab/shift+tab  cycle panes\n")
+	sb.WriteString("  1/2/3          jump to pane\n")
+	sb.WriteString("  +/-            grow/shrink pane\n")
 
 	sb.WriteString("\nModes:\n")
-	sb.WriteString("  i     - insert mode\n")
-	sb.WriteString("  esc   - normal mode\n")
-	sb.WriteString("  :     - command mode\n")
+	sb.WriteString("  i    insert mode\n")
+	sb.WriteString("  esc  normal mode\n")
+	sb.WriteString("  :    command mode\n")
 
-	sb.WriteString("\nTable List:\n")
-	sb.WriteString("  j/k   - navigate tables\n")
-	sb.WriteString("  gg/G  - top/bottom\n")
-	sb.WriteString("  /     - filter tables\n")
-	sb.WriteString("  Enter - query selected table\n")
-	sb.WriteString("  d     - describe table\n")
-	sb.WriteString("  y     - yank table name\n")
-	sb.WriteString("  R     - refresh schema\n")
-
-	sb.WriteString("\nResults:\n")
-	sb.WriteString("  j/k       - navigate items\n")
-	sb.WriteString("  g/G       - top/bottom\n")
-	sb.WriteString("  h/l       - left/right\n")
-	sb.WriteString("  0/$       - first/last column\n")
-	sb.WriteString("  ctrl+d/u  - half page down/up\n")
-	sb.WriteString("  ctrl+f/b  - full page down/up\n")
-	sb.WriteString("  enter     - inspect cell\n")
-	sb.WriteString("  y         - yank cell\n")
-	sb.WriteString("  Y         - yank row\n")
-
-	sb.WriteString("\nVisual (results):\n")
-	sb.WriteString("  V     - visual line (rows)\n")
-	sb.WriteString("  v     - visual block (rectangle)\n")
-	sb.WriteString("  j/k   - extend row selection\n")
-	sb.WriteString("  h/l   - extend column selection\n")
-	sb.WriteString("  tab   - toggle row/col axis (V mode)\n")
-	sb.WriteString("  y     - yank selection (CSV)\n")
-	sb.WriteString("  esc   - cancel\n")
-
-	sb.WriteString("\nEditing (results):\n")
-	sb.WriteString("  e       - edit cell\n")
-	sb.WriteString("  dR      - delete row\n")
-	sb.WriteString("  oR      - insert row\n")
-	sb.WriteString("  ctrl+z  - undo last change\n")
-	sb.WriteString("  :commit   - apply changes\n")
-	sb.WriteString("  :rollback - discard changes\n")
-	sb.WriteString("  :changes  - list changes\n")
-
-	sb.WriteString("\nBuffers:\n")
-	sb.WriteString("  gt/gT       - next/prev buffer\n")
-	sb.WriteString("  :new/:enew  - new buffer\n")
-	sb.WriteString("  :bd         - close buffer\n")
-	sb.WriteString("  :bn/:bp     - next/prev buffer\n")
-	sb.WriteString("  :b N        - switch to buffer N\n")
-	sb.WriteString("  :ls         - list buffers\n")
+	sb.WriteString("\nConnection:\n")
+	sb.WriteString("  ctrl+o    switch connection\n")
+	sb.WriteString("  :connect  switch connection\n")
 
 	sb.WriteString("\nCommands:\n")
-	sb.WriteString("  :q    - quit\n")
-	sb.WriteString("  :w    - run query\n")
-	sb.WriteString("  :set  - change setting\n")
-	sb.WriteString("  :export csv|json|sql <file>\n")
-	sb.WriteString("  :theme <name> - switch theme\n")
+	sb.WriteString("  :q  :w  :set  :export  :theme\n")
 
-	sb.WriteString("\n  ?     - toggle this help\n")
-	sb.WriteString("  ctrl+c - quit\n")
+	sb.WriteString("\nBuffers:\n")
+	sb.WriteString("  gt/gT  :new  :bd  :bn/:bp  :b N  :ls\n")
+
+	// Pane-specific section
+	switch activePane {
+	case pane.TableList:
+		sb.WriteString("\nTable List:\n")
+		sb.WriteString("  j/k    navigate tables\n")
+		sb.WriteString("  gg/G   top/bottom\n")
+		sb.WriteString("  /      filter tables\n")
+		sb.WriteString("  Enter  query selected table\n")
+		sb.WriteString("  d      describe table\n")
+		sb.WriteString("  y      yank table name\n")
+		sb.WriteString("  R      refresh schema\n")
+
+	case pane.QueryEditor:
+		sb.WriteString("\nQuery Editor:\n")
+		sb.WriteString("  j/k/h/l  navigate\n")
+		sb.WriteString("  0/$      line start/end\n")
+		sb.WriteString("  w/b      word forward/back\n")
+		sb.WriteString("  gg/G     top/bottom\n")
+		sb.WriteString("  dd       delete line\n")
+		sb.WriteString("  D        delete to end\n")
+		sb.WriteString("  u        undo\n")
+		sb.WriteString("  a/A/I    insert variants\n")
+		sb.WriteString("  o/O      open line below/above\n")
+		sb.WriteString("  x        delete char\n")
+		sb.WriteString("  y        yank, p/P paste\n")
+		sb.WriteString("  v/V      visual mode\n")
+		sb.WriteString("  Enter    run query\n")
+
+	case pane.ResultView:
+		sb.WriteString("\nResults:\n")
+		sb.WriteString("  j/k/h/l   navigate\n")
+		sb.WriteString("  g/G       top/bottom\n")
+		sb.WriteString("  0/$       first/last column\n")
+		sb.WriteString("  ctrl+d/u  half page down/up\n")
+		sb.WriteString("  ctrl+f/b  full page down/up\n")
+		sb.WriteString("  e         edit cell\n")
+		sb.WriteString("  y/Y       yank cell/row\n")
+
+		sb.WriteString("\nVisual:\n")
+		sb.WriteString("  V/v       line/block select\n")
+		sb.WriteString("  j/k/h/l   extend selection\n")
+		sb.WriteString("  tab       toggle axis (V mode)\n")
+		sb.WriteString("  y         yank selection\n")
+		sb.WriteString("  esc       cancel\n")
+
+		sb.WriteString("\nEditing:\n")
+		sb.WriteString("  dR        delete row\n")
+		sb.WriteString("  oR        insert row\n")
+		sb.WriteString("  ctrl+z    undo last change\n")
+		sb.WriteString("  :commit   apply changes\n")
+		sb.WriteString("  :rollback discard changes\n")
+	}
 
 	return sb.String()
 }

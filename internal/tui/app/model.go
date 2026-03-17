@@ -11,11 +11,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/mdjarv/db/internal/conn"
 	"github.com/mdjarv/db/internal/db"
 	"github.com/mdjarv/db/internal/editor"
 	"github.com/mdjarv/db/internal/export"
 	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
+	"github.com/mdjarv/db/internal/tui/components/connselector"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/queryeditor"
@@ -36,18 +38,24 @@ const (
 
 // Model is the top-level bubbletea model composing all TUI components.
 type Model struct {
-	mode        core.Mode
-	panes       *pane.Manager
-	tableList   *tablelist.Model
-	queryEditor *queryeditor.Model
-	resultView  *resultview.Model
-	statusBar   *statusbar.Model
-	commandBar  *commandbar.Model
-	dialog      *dialog.Model
-	editDialog  *editdialog.Model
-	buffers     *BufferManager
-	conn        db.Conn
-	inspector   schema.Inspector
+	mode         core.Mode
+	panes        *pane.Manager
+	tableList    *tablelist.Model
+	queryEditor  *queryeditor.Model
+	resultView   *resultview.Model
+	statusBar    *statusbar.Model
+	commandBar   *commandbar.Model
+	dialog       *dialog.Model
+	editDialog   *editdialog.Model
+	connSelector *connselector.Model
+	buffers      *BufferManager
+	conn         db.Conn
+	inspector    schema.Inspector
+
+	// connection management
+	stores  []*conn.Store
+	creds   *conn.CredentialStore
+	gitRoot string
 
 	// data editing
 	changeBuf  *editor.ChangeBuffer
@@ -58,12 +66,23 @@ type Model struct {
 	editPKIdx  []int               // PK column indices in result set
 	editCols   []schema.ColumnInfo // column info for current result
 
-	width     int
-	height    int
-	leftRatio float64
-	showHelp  bool
-	ready     bool
-	keySeq    core.KeySeq
+	width      int
+	height     int
+	leftRatio  float64
+	showHelp   bool
+	helpScroll int
+	ready      bool
+	keySeq     core.KeySeq
+}
+
+// Options configures the app model.
+type Options struct {
+	Conn      db.Conn
+	Inspector schema.Inspector
+	ConnInfo  string
+	Stores    []*conn.Store
+	Creds     *conn.CredentialStore
+	GitRoot   string
 }
 
 // New creates the app model with all sub-components.
@@ -81,34 +100,58 @@ func New() Model {
 	bm := NewBufferManager()
 
 	return Model{
-		mode:        core.ModeNormal,
-		panes:       pm,
-		tableList:   tl,
-		queryEditor: qe,
-		resultView:  rv,
-		statusBar:   statusbar.New(),
-		commandBar:  commandbar.New(),
-		dialog:      dialog.New(),
-		editDialog:  editdialog.New(),
-		buffers:     bm,
-		changeBuf:   editor.NewChangeBuffer(),
-		leftRatio:   defaultLeftRatio,
+		mode:         core.ModeNormal,
+		panes:        pm,
+		tableList:    tl,
+		queryEditor:  qe,
+		resultView:   rv,
+		statusBar:    statusbar.New(),
+		commandBar:   commandbar.New(),
+		dialog:       dialog.New(),
+		editDialog:   editdialog.New(),
+		connSelector: connselector.New(),
+		buffers:      bm,
+		changeBuf:    editor.NewChangeBuffer(),
+		leftRatio:    defaultLeftRatio,
 	}
 }
 
 // NewWithConn creates the app model with a database connection.
-func NewWithConn(conn db.Conn, insp schema.Inspector, connInfo string) Model {
+func NewWithConn(c db.Conn, insp schema.Inspector, connInfo string) Model {
 	m := New()
-	m.conn = conn
+	m.conn = c
 	m.inspector = insp
 	m.statusBar.SetConn(connInfo)
 	return m
 }
 
+// NewWithOpts creates the app model with full options.
+func NewWithOpts(opts Options) Model {
+	m := New()
+	m.conn = opts.Conn
+	m.inspector = opts.Inspector
+	m.stores = opts.Stores
+	m.creds = opts.Creds
+	m.gitRoot = opts.GitRoot
+	if opts.ConnInfo != "" {
+		m.statusBar.SetConn(opts.ConnInfo)
+	}
+	return m
+}
+
+// Cleanup closes the database connection. Call after tea.Program exits.
+func (m Model) Cleanup() {
+	if m.conn != nil {
+		_ = m.conn.Close(context.Background())
+	}
+}
+
 // Init returns the initial command.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{tea.WindowSize()}
-	if m.inspector != nil {
+	if m.conn == nil && (len(m.stores) > 0 || m.gitRoot != "") {
+		cmds = append(cmds, m.discoverConnections())
+	} else if m.inspector != nil {
 		cmds = append(cmds, m.loadSchema())
 	}
 	return tea.Batch(cmds...)
@@ -259,6 +302,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		result, cmd := m.handleCommitResult(msg)
 		return result, cmd
 
+	case core.ConnSelectorMsg:
+		m.connSelector.Open(msg.Candidates)
+		return m, nil
+
+	case connselector.SelectMsg:
+		m.connSelector.Close()
+		m.statusBar.SetMessage("connecting...")
+		return m, m.connectTo(msg.Candidate)
+
+	case connselector.CancelMsg:
+		if m.conn == nil {
+			return m, tea.Quit
+		}
+		return m, nil
+
+	case connselector.QuitMsg:
+		return m, tea.Quit
+
+	case core.ConnectedMsg:
+		if m.conn != nil {
+			_ = m.conn.Close(context.Background())
+		}
+		m.conn = msg.Conn
+		m.inspector = msg.Inspector
+		m.statusBar.SetConn(msg.ConnInfo)
+		m.changeBuf.Clear()
+		m.resultView.ClearModified()
+		m.editPKCols = nil
+		m.editPKIdx = nil
+		m.statusBar.SetSuccess("connected: " + msg.ConnInfo)
+		m.saveDefault(msg.Candidate)
+		return m, m.loadSchema()
+
+	case core.ConnectErrorMsg:
+		m.statusBar.SetError("connection failed: " + msg.Err.Error())
+		if m.conn == nil {
+			return m, m.discoverConnections()
+		}
+		return m, nil
+
 	case core.YankMsg:
 		m.mode = core.ModeNormal
 		m.statusBar.SetMode(m.mode)
@@ -298,6 +381,7 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 		m.commandBar.Activate()
 	case ActionHelp:
 		m.showHelp = !m.showHelp
+		m.helpScroll = 0
 	case ActionFocusNext:
 		m.panes.CycleForward()
 	case ActionFocusPrev:
@@ -344,6 +428,13 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 		m.buffers.Prev()
 		m.restoreBufferState()
 		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
+	case ActionConnSelector:
+		if m.changeBuf.Len() > 0 {
+			m.dialog.Open("switch-conn", "Uncommitted changes",
+				fmt.Sprintf("%d pending changes will be lost. Switch?", m.changeBuf.Len()))
+			return m, nil
+		}
+		return m, m.discoverConnections()
 	}
 	return m, nil
 }
@@ -482,6 +573,77 @@ func (m Model) loadTableDetail(t schema.Table) tea.Cmd {
 	}
 }
 
+// Connection management
+
+func (m Model) discoverConnections() tea.Cmd {
+	stores := m.stores
+	creds := m.creds
+	gitRoot := m.gitRoot
+	return func() tea.Msg {
+		candidates := conn.Discover(conn.DiscoverOptions{
+			Stores:  stores,
+			Creds:   creds,
+			GitRoot: gitRoot,
+		})
+		return core.ConnSelectorMsg{Candidates: candidates}
+	}
+}
+
+func (m Model) connectTo(candidate conn.Candidate) tea.Cmd {
+	cfg := candidate.Config
+	return func() tea.Msg {
+		c, err := db.Open(context.Background(), "postgres", cfg.DSN())
+		if err != nil {
+			return core.ConnectErrorMsg{Err: err}
+		}
+		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
+		insp := schema.NewPostgresInspector(c)
+		return core.ConnectedMsg{Conn: c, Inspector: insp, ConnInfo: connInfo, Candidate: candidate}
+	}
+}
+
+// saveDefault persists the selected candidate as the default connection.
+func (m *Model) saveDefault(candidate conn.Candidate) {
+	if len(m.stores) == 0 {
+		return
+	}
+
+	cfg := candidate.Config
+
+	switch candidate.Source {
+	case conn.SourceProjectStore, conn.SourceGlobalStore:
+		// already in a store — just set default on the matching store
+		if cfg.Name == "" {
+			return
+		}
+		for _, s := range m.stores {
+			if _, err := s.Get(cfg.Name); err == nil {
+				if err := s.SetDefault(cfg.Name); err != nil {
+					m.statusBar.SetMessage("default save failed: " + err.Error())
+				}
+				return
+			}
+		}
+
+	case conn.SourceEnvVar, conn.SourceDotEnv:
+		// not in any store — save to preferred store, then set default
+		name := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
+		password := cfg.Password
+		cfg.Name = name
+		store := m.stores[0] // project store if available, else global
+		if err := store.Add(cfg); err != nil {
+			m.statusBar.SetMessage("save connection failed: " + err.Error())
+			return
+		}
+		if password != "" && m.creds != nil {
+			_ = m.creds.SetPassword(name, password)
+		}
+		if err := store.SetDefault(name); err != nil {
+			m.statusBar.SetMessage("default save failed: " + err.Error())
+		}
+	}
+}
+
 // M9: export support
 
 func (m *Model) parseExport(args string) tea.Cmd {
@@ -557,6 +719,12 @@ func (m *Model) exportResult(format, path string) tea.Cmd {
 // handleKeyInput processes keyboard input with modal dispatch.
 func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// overlay UIs get first priority
+	if m.connSelector.IsActive() {
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		return m, m.connSelector.Update(msg)
+	}
 	if m.dialog.IsActive() {
 		return m, m.dialog.Update(msg)
 	}
@@ -564,7 +732,20 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.commandBar.Update(msg)
 	}
 	if m.showHelp {
-		m.showHelp = false
+		switch msg.String() {
+		case "j", "down":
+			m.helpScroll++
+		case "k", "up":
+			if m.helpScroll > 0 {
+				m.helpScroll--
+			}
+		case "g":
+			m.helpScroll = 0
+		case "G":
+			m.helpScroll = 9999
+		default:
+			m.showHelp = false
+		}
 		return m, nil
 	}
 	if m.editDialog.IsActive() {
@@ -665,6 +846,10 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.connSelector.IsActive() {
+		return m.connSelector.View(m.width, m.height)
+	}
+
 	if m.showHelp {
 		return m.helpView()
 	}
@@ -696,8 +881,8 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, content, bottom)
 }
 
-func (m Model) helpView() string {
-	help := HelpText()
+func (m *Model) helpView() string {
+	help := HelpText(m.panes.ActiveID())
 	lines := strings.Split(help, "\n")
 
 	// border(2) + padding(2) + some margin
@@ -705,17 +890,39 @@ func (m Model) helpView() string {
 	if maxLines < 5 {
 		maxLines = 5
 	}
-	if len(lines) > maxLines {
-		lines = lines[:maxLines]
+
+	// clamp scroll
+	totalLines := len(lines)
+	maxScroll := totalLines - maxLines
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.helpScroll > maxScroll {
+		m.helpScroll = maxScroll
+	}
+
+	// apply scroll window
+	start := m.helpScroll
+	end := start + maxLines
+	if end > totalLines {
+		end = totalLines
+	}
+	visible := lines[start:end]
+
+	// scroll hint
+	if totalLines > maxLines {
+		visible = append(visible, "")
+		visible = append(visible, lipgloss.NewStyle().Foreground(lipgloss.Color("240")).
+			Render("(j/k to scroll, ? to dismiss)"))
 	}
 
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(theme.Current().Styles.BorderFocused).
 		Padding(1, 2).
-		Width(50)
+		Width(54)
 
-	overlay := style.Render(strings.Join(lines, "\n"))
+	overlay := style.Render(strings.Join(visible, "\n"))
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
 }

@@ -33,6 +33,7 @@ var commandRegistry = map[string]cmdHandler{
 	"ls":       cmdListBuffers,
 	"buffers":  cmdListBuffers,
 	"theme":    cmdTheme,
+	"connect":  cmdConnect,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -142,6 +143,15 @@ func cmdListBuffers(m *Model, _ string) (tea.Model, tea.Cmd) {
 	m.saveBufferState()
 	m.statusBar.SetMessage(m.buffers.List())
 	return *m, nil
+}
+
+func cmdConnect(m *Model, _ string) (tea.Model, tea.Cmd) {
+	if m.changeBuf.Len() > 0 {
+		m.dialog.Open("switch-conn", "Uncommitted changes",
+			fmt.Sprintf("%d pending changes will be lost. Switch?", m.changeBuf.Len()))
+		return *m, nil
+	}
+	return *m, m.discoverConnections()
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {

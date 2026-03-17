@@ -3,6 +3,8 @@ package core
 import (
 	"time"
 
+	"github.com/mdjarv/db/internal/conn"
+	"github.com/mdjarv/db/internal/db"
 	"github.com/mdjarv/db/internal/schema"
 )
 
@@ -132,4 +134,22 @@ type PendingChangesMsg struct {
 // EditingDisabledMsg signals that editing is not available.
 type EditingDisabledMsg struct {
 	Reason string
+}
+
+// ConnSelectorMsg triggers opening the connection selector with candidates.
+type ConnSelectorMsg struct {
+	Candidates []conn.Candidate
+}
+
+// ConnectedMsg signals a successful connection switch.
+type ConnectedMsg struct {
+	Conn      db.Conn
+	Inspector schema.Inspector
+	ConnInfo  string
+	Candidate conn.Candidate
+}
+
+// ConnectErrorMsg signals a connection attempt failed.
+type ConnectErrorMsg struct {
+	Err error
 }

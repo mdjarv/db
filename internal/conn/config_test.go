@@ -11,7 +11,7 @@ func TestDSN(t *testing.T) {
 		{
 			name: "basic",
 			cfg:  ConnectionConfig{Host: "localhost", Port: 5432, User: "app", DBName: "mydb"},
-			want: "postgres://app@localhost:5432/mydb",
+			want: "postgres://app@localhost:5432/mydb?sslmode=disable",
 		},
 		{
 			name: "with password",
@@ -26,7 +26,7 @@ func TestDSN(t *testing.T) {
 		{
 			name: "no user",
 			cfg:  ConnectionConfig{Host: "localhost", Port: 5432, DBName: "test"},
-			want: "postgres://localhost:5432/test",
+			want: "postgres://localhost:5432/test?sslmode=disable",
 		},
 	}
 

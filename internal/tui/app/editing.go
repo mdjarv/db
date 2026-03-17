@@ -276,6 +276,13 @@ func (m *Model) handleDialogResult(msg dialog.ResultMsg) (Model, tea.Cmd) {
 			return m.doCommit()
 		}
 		m.statusBar.SetMessage("commit cancelled")
+	case "switch-conn":
+		if msg.Confirmed {
+			m.changeBuf.Clear()
+			m.resultView.ClearModified()
+			return *m, m.discoverConnections()
+		}
+		m.statusBar.SetMessage("switch cancelled")
 	}
 	return *m, nil
 }

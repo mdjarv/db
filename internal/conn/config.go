@@ -33,12 +33,20 @@ func (c ConnectionConfig) DSN() string {
 			u.User = url.User(c.User)
 		}
 	}
-	if c.SSLMode != "" {
+	sslmode := c.SSLMode
+	if sslmode == "" && isLocalHost(c.Host) {
+		sslmode = "disable"
+	}
+	if sslmode != "" {
 		q := u.Query()
-		q.Set("sslmode", c.SSLMode)
+		q.Set("sslmode", sslmode)
 		u.RawQuery = q.Encode()
 	}
 	return u.String()
+}
+
+func isLocalHost(host string) bool {
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 // ParseDSN parses a postgres:// URL into a ConnectionConfig.
