@@ -6,13 +6,31 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/mdjarv/db/internal/tui/theme"
+)
+
+// TypeHint identifies the data type of a column for styling.
+type TypeHint int
+
+// Type hint constants.
+const (
+	HintNone      TypeHint = iota
+	HintBool               // boolean
+	HintNumber             // integer, float, numeric
+	HintDate               // date, time, timestamp, interval
+	HintUUID               // uuid
+	HintJSON               // json, jsonb
+	HintArray              // text[], integer[], etc.
+	HintComposite          // composite/record types
 )
 
 // Column defines a table column.
 type Column struct {
-	Title string
-	Width int
+	Title    string
+	Width    int
+	TypeHint TypeHint
 }
 
 // VisualKind identifies the type of visual selection.
@@ -442,11 +460,20 @@ func (m *Model) View(focused bool) string {
 	return sb.String()
 }
 
+// SanitizeCell replaces control characters with visible escape sequences for display.
+func SanitizeCell(val string) string {
+	if !strings.ContainsAny(val, "\n\r\t") {
+		return val
+	}
+	r := strings.NewReplacer("\r\n", "\\n", "\n", "\\n", "\r", "\\r", "\t", "\\t")
+	return r.Replace(val)
+}
+
 // renderCell renders a single cell value with proper styling.
 func (m *Model) renderCell(row, col, width int, focused bool, s theme.Styles) string {
 	val := ""
 	if col < len(m.Rows[row]) {
-		val = m.Rows[row][col]
+		val = SanitizeCell(m.Rows[row][col])
 	}
 	if IsNull(val) {
 		text := padCell("NULL", width)
@@ -456,7 +483,43 @@ func (m *Model) renderCell(row, col, width int, focused bool, s theme.Styles) st
 		return s.Null.Render(text)
 	}
 	text := truncateCell(val, width)
-	return m.styleCell(text, row, col, focused, s)
+	return m.styleCellWithValue(text, val, row, col, focused, s)
+}
+
+func (m *Model) styleCellWithValue(text, rawVal string, row, col int, focused bool, s theme.Styles) string {
+	switch m.Visual {
+	case VisualLine:
+		inRow := m.inRowRange(row)
+		inCol := col >= m.LineColStart && col <= m.LineColEnd
+		if inRow && inCol {
+			return s.Selection.Render(text)
+		}
+		return m.styleByType(text, rawVal, col, s)
+
+	case VisualBlock:
+		if m.inRowRange(row) && m.inBlockColRange(col) {
+			return s.Selection.Render(text)
+		}
+		return m.styleByType(text, rawVal, col, s)
+
+	default:
+		if m.DeletedRows[row] {
+			return s.Deleted.Render(text)
+		}
+		if focused && row == m.CursorRow && col == m.CursorCol {
+			return s.Cursor.Render(text)
+		}
+		if m.ModifiedCells[CellKey{Row: row, Col: col}] {
+			return s.Modified.Render(text)
+		}
+		if focused && row == m.CursorRow {
+			if col < len(m.Columns) && m.Columns[col].TypeHint != HintNone {
+				return m.styleByType(text, rawVal, col, s)
+			}
+			return s.CursorRow.Render(text)
+		}
+		return m.styleByType(text, rawVal, col, s)
+	}
 }
 
 // styleSep renders a column separator, inheriting selection style when
@@ -479,36 +542,143 @@ func (m *Model) styleSep(sep string, row, colLeft, colRight int, s theme.Styles)
 }
 
 func (m *Model) styleCell(text string, row, col int, focused bool, s theme.Styles) string {
-	switch m.Visual {
-	case VisualLine:
-		inRow := m.inRowRange(row)
-		inCol := col >= m.LineColStart && col <= m.LineColEnd
-		if inRow && inCol {
-			return s.Selection.Render(text)
-		}
-		return text
+	return m.styleCellWithValue(text, "", row, col, focused, s)
+}
 
-	case VisualBlock:
-		if m.inRowRange(row) && m.inBlockColRange(col) {
-			return s.Selection.Render(text)
-		}
-		return text
-
-	default:
-		if m.DeletedRows[row] {
-			return s.Deleted.Render(text)
-		}
-		if focused && row == m.CursorRow && col == m.CursorCol {
-			return s.Cursor.Render(text)
-		}
-		if m.ModifiedCells[CellKey{Row: row, Col: col}] {
-			return s.Modified.Render(text)
-		}
-		if focused && row == m.CursorRow {
-			return s.CursorRow.Render(text)
-		}
+func (m *Model) styleByType(text, rawVal string, col int, s theme.Styles) string {
+	if col >= len(m.Columns) {
 		return text
 	}
+	switch m.Columns[col].TypeHint {
+	case HintBool:
+		if strings.TrimSpace(rawVal) == "true" {
+			return s.DataBoolTrue.Render(text)
+		}
+		return s.DataBoolFalse.Render(text)
+	case HintNumber:
+		return s.DataNumber.Render(text)
+	case HintDate:
+		return styledGroups(text, isDigit, s.DataDate, s.Dim)
+	case HintUUID:
+		return styledGroups(text, isHexDigit, s.DataUUID, s.Dim)
+	case HintJSON:
+		return s.Dim.Render(text)
+	case HintArray:
+		return formatArrayCell(text, s)
+	case HintComposite:
+		return formatCompositeCell(text, s)
+	}
+	return text
+}
+
+// styledGroups renders text by alternating two styles based on a character predicate.
+// Characters matching groupA get styleA, others get styleB.
+func styledGroups(text string, groupA func(rune) bool, styleA, styleB lipgloss.Style) string {
+	if len(text) == 0 {
+		return text
+	}
+	var sb strings.Builder
+	var buf strings.Builder
+	inA := groupA(rune(text[0]))
+	for _, ch := range text {
+		a := groupA(ch)
+		if a != inA {
+			if inA {
+				sb.WriteString(styleA.Render(buf.String()))
+			} else {
+				sb.WriteString(styleB.Render(buf.String()))
+			}
+			buf.Reset()
+			inA = a
+		}
+		buf.WriteRune(ch)
+	}
+	if buf.Len() > 0 {
+		if inA {
+			sb.WriteString(styleA.Render(buf.String()))
+		} else {
+			sb.WriteString(styleB.Render(buf.String()))
+		}
+	}
+	return sb.String()
+}
+
+func isDigit(r rune) bool {
+	return r >= '0' && r <= '9'
+}
+
+func isHexDigit(r rune) bool {
+	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+}
+
+// formatArrayCell styles array values like {val1,val2}: braces/commas dim, values green.
+func formatArrayCell(text string, s theme.Styles) string {
+	return styledGroups(text, func(r rune) bool {
+		return r != '{' && r != '}' && r != ','
+	}, s.DataString, s.Dim)
+}
+
+// formatCompositeCell styles composite values like ("str",123,"str"):
+// parens/commas/quotes dim, quoted content green, unquoted content peach.
+func formatCompositeCell(text string, s theme.Styles) string {
+	type kind int
+	const (
+		kStruct kind = iota
+		kString
+		kValue
+	)
+
+	var sb strings.Builder
+	var buf strings.Builder
+	cur := kStruct
+	inQuotes := false
+
+	flush := func(k kind) {
+		if buf.Len() == 0 {
+			return
+		}
+		switch k {
+		case kStruct:
+			sb.WriteString(s.Dim.Render(buf.String()))
+		case kString:
+			sb.WriteString(s.DataString.Render(buf.String()))
+		case kValue:
+			sb.WriteString(s.DataNumber.Render(buf.String()))
+		}
+		buf.Reset()
+	}
+
+	for _, ch := range text {
+		var k kind
+		switch ch {
+		case '"':
+			k = kStruct
+			if inQuotes {
+				flush(kString)
+			}
+			inQuotes = !inQuotes
+		case '(', ')', ',':
+			if inQuotes {
+				k = kString
+			} else {
+				k = kStruct
+			}
+		default:
+			if inQuotes {
+				k = kString
+			} else {
+				k = kValue
+			}
+		}
+
+		if k != cur {
+			flush(cur)
+			cur = k
+		}
+		buf.WriteRune(ch)
+	}
+	flush(cur)
+	return sb.String()
 }
 
 func (m *Model) inRowRange(row int) bool {

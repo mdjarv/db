@@ -80,8 +80,13 @@ func TestFocusDirections(t *testing.T) {
 	}
 
 	m.FocusRight()
+	if m.ActiveID() != ResultView {
+		t.Errorf("FocusRight from TableList = %d, want ResultView", m.ActiveID())
+	}
+
+	m.FocusUp()
 	if m.ActiveID() != QueryEditor {
-		t.Errorf("FocusRight from TableList = %d, want QueryEditor", m.ActiveID())
+		t.Errorf("FocusUp from ResultView = %d, want QueryEditor", m.ActiveID())
 	}
 
 	m.FocusDown()

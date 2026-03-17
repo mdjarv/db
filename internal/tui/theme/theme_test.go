@@ -43,9 +43,9 @@ func TestValidateAcceptsAnsiNumbers(t *testing.T) {
 }
 
 func TestValidateAcceptsHexColors(t *testing.T) {
-	th := SolarizedDark()
+	th := DefaultDark()
 	if err := Validate(th); err != nil {
-		t.Errorf("solarized dark should validate: %v", err)
+		t.Errorf("default dark should validate: %v", err)
 	}
 }
 
@@ -91,11 +91,9 @@ colors:
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	// overridden field
 	if th.Colors.Chrome.Border != "#111111" {
 		t.Errorf("border = %q, want #111111", th.Colors.Chrome.Border)
 	}
-	// default field preserved (catppuccin mocha values)
 	if th.Colors.Chrome.BorderFocused != "#89b4fa" {
 		t.Errorf("border_focused = %q, want #89b4fa (default)", th.Colors.Chrome.BorderFocused)
 	}
@@ -144,9 +142,9 @@ func TestSetAndCurrent(t *testing.T) {
 	orig := Current()
 	defer Set(orig)
 
-	Set(Nord())
-	if Current().Name != "nord" {
-		t.Errorf("after Set(Nord), Current().Name = %q", Current().Name)
+	Set(DefaultDark())
+	if Current().Name != "default-dark" {
+		t.Errorf("after Set, Current().Name = %q", Current().Name)
 	}
 }
 
@@ -196,12 +194,12 @@ func TestBuildProducesStyles(t *testing.T) {
 }
 
 func TestResolveBuiltin(t *testing.T) {
-	th, err := Resolve("nord")
+	th, err := Resolve("default-dark")
 	if err != nil {
-		t.Fatalf("resolve nord: %v", err)
+		t.Fatalf("resolve default-dark: %v", err)
 	}
-	if th.Name != "nord" {
-		t.Errorf("name = %q, want nord", th.Name)
+	if th.Name != "default-dark" {
+		t.Errorf("name = %q, want default-dark", th.Name)
 	}
 }
 

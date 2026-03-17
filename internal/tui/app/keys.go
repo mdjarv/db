@@ -36,6 +36,7 @@ const (
 	ActionBufferNext
 	ActionBufferPrev
 	ActionConnSelector
+	ActionCommit
 )
 
 // Binding maps a key to an action in a specific mode.
@@ -68,6 +69,7 @@ var globalBindings = []Binding{
 	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualLine},
 	{Action: ActionModeNormal, Key: "esc", Desc: "cancel visual", Mode: core.ModeVisualBlock},
 	{Action: ActionConnSelector, Key: "ctrl+o", Desc: "switch connection", Mode: core.ModeNormal},
+	{Action: ActionCommit, Key: "ctrl+s", Desc: "commit changes", Mode: core.ModeNormal},
 }
 
 // MatchGlobal returns the action matching a key in the given mode.
@@ -101,9 +103,12 @@ func HelpText(activePane pane.ID) string {
 	sb.WriteString("\nConnection:\n")
 	sb.WriteString("  ctrl+o    switch connection\n")
 	sb.WriteString("  :connect  switch connection\n")
+	sb.WriteString("  a         add connection (in selector)\n")
+	sb.WriteString("  e         edit connection (in selector)\n")
+	sb.WriteString("  d         delete connection (in selector)\n")
 
 	sb.WriteString("\nCommands:\n")
-	sb.WriteString("  :q  :w  :set  :export  :theme\n")
+	sb.WriteString("  :q  :run  :set  :export  :theme\n")
 
 	sb.WriteString("\nBuffers:\n")
 	sb.WriteString("  gt/gT  :new  :bd  :bn/:bp  :b N  :ls\n")
@@ -156,7 +161,8 @@ func HelpText(activePane pane.ID) string {
 		sb.WriteString("\nEditing:\n")
 		sb.WriteString("  dR        delete row\n")
 		sb.WriteString("  oR        insert row\n")
-		sb.WriteString("  ctrl+z    undo last change\n")
+		sb.WriteString("  u         undo last change\n")
+		sb.WriteString("  ctrl+s    commit changes\n")
 		sb.WriteString("  :commit   apply changes\n")
 		sb.WriteString("  :rollback discard changes\n")
 	}

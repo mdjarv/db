@@ -47,14 +47,20 @@ func (t *Theme) Build() *Theme {
 		BorderVisual:    lipgloss.Color(c.Chrome.BorderVisual),
 
 		// Table
-		Header:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.UI.Header)),
-		Separator:    lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Separator)),
-		Cursor:       lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.CursorFG)).Background(lipgloss.Color(c.UI.Cursor)),
-		CursorRow:    lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.CursorRow)),
-		Selection:    lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.SelectionFG)).Background(lipgloss.Color(c.UI.Selection)),
-		ColSelection: lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.ColSelectionFG)).Background(lipgloss.Color(c.UI.ColSelection)),
-		Dim:          lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Dim)),
-		Null:         lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.Null)).Italic(true),
+		Header:        lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.UI.Header)),
+		Separator:     lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Separator)),
+		Cursor:        lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.CursorFG)).Background(lipgloss.Color(c.UI.Cursor)),
+		CursorRow:     lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.CursorRow)),
+		Selection:     lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.SelectionFG)).Background(lipgloss.Color(c.UI.Selection)),
+		ColSelection:  lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.ColSelectionFG)).Background(lipgloss.Color(c.UI.ColSelection)),
+		Dim:           lipgloss.NewStyle().Foreground(lipgloss.Color(c.UI.Dim)),
+		Null:          lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.Null)).Italic(true),
+		DataBoolTrue:  lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.BoolTrue)),
+		DataBoolFalse: lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.BoolFalse)),
+		DataNumber:    lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.Number)),
+		DataDate:      lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.Date)),
+		DataUUID:      lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.UUID)),
+		DataString:    lipgloss.NewStyle().Foreground(lipgloss.Color(c.Data.String)),
 
 		// Status bar
 		StatusBarBG: lipgloss.Color(c.Chrome.StatusBarBG),
@@ -140,11 +146,14 @@ type SyntaxColors struct {
 
 // DataColors defines cell data type colors.
 type DataColors struct {
-	Null    string `yaml:"null"`
-	Boolean string `yaml:"boolean"`
-	Number  string `yaml:"number"`
-	String  string `yaml:"string"`
-	Date    string `yaml:"date"`
+	Null      string `yaml:"null"`
+	Boolean   string `yaml:"boolean"`
+	BoolTrue  string `yaml:"bool_true"`
+	BoolFalse string `yaml:"bool_false"`
+	Number    string `yaml:"number"`
+	String    string `yaml:"string"`
+	Date      string `yaml:"date"`
+	UUID      string `yaml:"uuid"`
 }
 
 // UIColors defines cursor, selection, and other UI element colors.
@@ -179,14 +188,20 @@ type Styles struct {
 	BorderVisual    lipgloss.Color
 
 	// Table
-	Header       lipgloss.Style
-	Separator    lipgloss.Style
-	Cursor       lipgloss.Style
-	CursorRow    lipgloss.Style
-	Selection    lipgloss.Style
-	ColSelection lipgloss.Style
-	Dim          lipgloss.Style
-	Null         lipgloss.Style
+	Header        lipgloss.Style
+	Separator     lipgloss.Style
+	Cursor        lipgloss.Style
+	CursorRow     lipgloss.Style
+	Selection     lipgloss.Style
+	ColSelection  lipgloss.Style
+	Dim           lipgloss.Style
+	Null          lipgloss.Style
+	DataBoolTrue  lipgloss.Style
+	DataBoolFalse lipgloss.Style
+	DataNumber    lipgloss.Style
+	DataDate      lipgloss.Style
+	DataUUID      lipgloss.Style
+	DataString    lipgloss.Style
 
 	// Status bar
 	StatusBarBG    lipgloss.Color
@@ -228,11 +243,6 @@ type Styles struct {
 func Names() []string {
 	return []string{
 		"default-dark",
-		"default-light",
-		"solarized-dark",
-		"solarized-light",
-		"nord",
-		"dracula",
 	}
 }
 
@@ -241,16 +251,6 @@ func Get(name string) *Theme {
 	switch name {
 	case "default-dark":
 		return DefaultDark()
-	case "default-light":
-		return DefaultLight()
-	case "solarized-dark":
-		return SolarizedDark()
-	case "solarized-light":
-		return SolarizedLight()
-	case "nord":
-		return Nord()
-	case "dracula":
-		return Dracula()
 	default:
 		return nil
 	}

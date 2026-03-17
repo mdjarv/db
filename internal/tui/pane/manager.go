@@ -97,7 +97,7 @@ func (m *Manager) FocusLeft() {
 // FocusRight moves focus to the right pane.
 func (m *Manager) FocusRight() {
 	if m.ActiveID() == TableList {
-		m.SetActive(QueryEditor)
+		m.SetActive(ResultView)
 	}
 }
 

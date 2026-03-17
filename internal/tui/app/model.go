@@ -17,6 +17,7 @@ import (
 	"github.com/mdjarv/db/internal/export"
 	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
+	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/connselector"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
@@ -48,14 +49,16 @@ type Model struct {
 	dialog       *dialog.Model
 	editDialog   *editdialog.Model
 	connSelector *connselector.Model
+	connForm     *connform.Model
 	buffers      *BufferManager
 	conn         db.Conn
 	inspector    schema.Inspector
 
 	// connection management
-	stores  []*conn.Store
-	creds   *conn.CredentialStore
-	gitRoot string
+	stores                 []*conn.Store
+	creds                  *conn.CredentialStore
+	gitRoot                string
+	pendingDeleteCandidate *conn.Candidate
 
 	// data editing
 	changeBuf  *editor.ChangeBuffer
@@ -110,6 +113,7 @@ func New() Model {
 		dialog:       dialog.New(),
 		editDialog:   editdialog.New(),
 		connSelector: connselector.New(),
+		connForm:     connform.New(),
 		buffers:      bm,
 		changeBuf:    editor.NewChangeBuffer(),
 		leftRatio:    defaultLeftRatio,
@@ -216,8 +220,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.QueryRequestMsg:
 		m.queryEditor.SetContent(msg.SQL)
-		m.panes.SetActive(pane.QueryEditor)
 		m.recalcLayout()
+		if m.conn != nil {
+			m.statusBar.SetMessage("executing...")
+			return m, m.executeQuery(msg.SQL)
+		}
+		m.panes.SetActive(pane.QueryEditor)
 		m.statusBar.SetMessage("Query: " + msg.SQL)
 		return m, nil
 
@@ -320,6 +328,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case connselector.QuitMsg:
 		return m, tea.Quit
 
+	case connselector.AddMsg:
+		if len(m.stores) == 0 {
+			m.statusBar.SetError("no connection store available")
+			return m, nil
+		}
+		m.connForm.OpenAdd(msg.Source)
+		return m, nil
+
+	case connselector.EditMsg:
+		password := ""
+		if m.creds != nil {
+			password, _ = m.creds.GetPassword(msg.Candidate.Config.Name)
+		}
+		m.connForm.OpenEdit(msg.Candidate.Config, password, msg.Candidate.Source)
+		return m, nil
+
+	case connselector.DeleteMsg:
+		c := msg.Candidate
+		m.pendingDeleteCandidate = &c
+		m.dialog.Open("delete-conn", "Delete connection?", c.Config.Name)
+		return m, nil
+
+	case connform.SubmitMsg:
+		return m.handleConnFormSubmit(msg)
+
+	case connform.CancelMsg:
+		return m, nil
+
+	case connSelectorRefreshMsg:
+		m.connSelector.Refresh(msg.candidates, msg.restoreName)
+		return m, nil
+
 	case core.ConnectedMsg:
 		if m.conn != nil {
 			_ = m.conn.Close(context.Background())
@@ -365,6 +405,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 	switch action {
 	case ActionQuit:
+		if m.changeBuf.Len() > 0 {
+			m.dialog.Open("quit", "Uncommitted changes",
+				fmt.Sprintf("%d pending changes will be lost. Quit?", m.changeBuf.Len()))
+			return m, nil
+		}
 		return m, tea.Quit
 	case ActionModeNormal:
 		m.mode = core.ModeNormal
@@ -428,6 +473,8 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 		m.buffers.Prev()
 		m.restoreBufferState()
 		m.statusBar.SetMessage(fmt.Sprintf("buffer %d", m.buffers.ActiveIndex()))
+	case ActionCommit:
+		return m.handleCommit()
 	case ActionConnSelector:
 		if m.changeBuf.Len() > 0 {
 			m.dialog.Open("switch-conn", "Uncommitted changes",
@@ -719,14 +766,20 @@ func (m *Model) exportResult(format, path string) tea.Cmd {
 // handleKeyInput processes keyboard input with modal dispatch.
 func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// overlay UIs get first priority
+	if m.connForm.IsActive() {
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		return m, m.connForm.Update(msg)
+	}
+	if m.dialog.IsActive() {
+		return m, m.dialog.Update(msg)
+	}
 	if m.connSelector.IsActive() {
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
 		}
 		return m, m.connSelector.Update(msg)
-	}
-	if m.dialog.IsActive() {
-		return m, m.dialog.Update(msg)
 	}
 	if m.commandBar.Active() {
 		return m, m.commandBar.Update(msg)
@@ -846,6 +899,12 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.connForm.IsActive() {
+		return m.connForm.View(m.width, m.height)
+	}
+	if m.dialog.IsActive() {
+		return m.dialog.View(m.width, m.height)
+	}
 	if m.connSelector.IsActive() {
 		return m.connSelector.View(m.width, m.height)
 	}
@@ -854,9 +913,6 @@ func (m Model) View() string {
 		return m.helpView()
 	}
 
-	if m.dialog.IsActive() {
-		return m.dialog.View(m.width, m.height)
-	}
 	if m.editDialog.IsActive() {
 		return m.editDialog.View(m.width, m.height)
 	}

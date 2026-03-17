@@ -7,7 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mdjarv/db/internal/conn"
 	"github.com/mdjarv/db/internal/editor"
+	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/table"
@@ -283,6 +285,21 @@ func (m *Model) handleDialogResult(msg dialog.ResultMsg) (Model, tea.Cmd) {
 			return *m, m.discoverConnections()
 		}
 		m.statusBar.SetMessage("switch cancelled")
+	case "delete-conn":
+		if msg.Confirmed {
+			return m.doDeleteConn()
+		}
+		m.statusBar.SetMessage("delete cancelled")
+	case "rollback":
+		if msg.Confirmed {
+			return m.handleRollback()
+		}
+		m.statusBar.SetMessage("rollback cancelled")
+	case "quit":
+		if msg.Confirmed {
+			return *m, tea.Quit
+		}
+		m.statusBar.SetMessage("quit cancelled")
 	}
 	return *m, nil
 }
@@ -507,6 +524,109 @@ func parseTableFromSQL(sql string) (string, string) {
 		return strings.Trim(parts[1], `"`), strings.Trim(parts[0], `"`)
 	}
 	return tablePart, "public"
+}
+
+// Connection CRUD helpers
+
+type connSelectorRefreshMsg struct {
+	candidates  []conn.Candidate
+	restoreName string
+}
+
+// refreshConnSelector re-discovers connections and emits a refresh message.
+func (m Model) refreshConnSelector(restoreName string) tea.Cmd {
+	stores := m.stores
+	creds := m.creds
+	gitRoot := m.gitRoot
+	return func() tea.Msg {
+		candidates := conn.Discover(conn.DiscoverOptions{
+			Stores: stores, Creds: creds, GitRoot: gitRoot,
+		})
+		return connSelectorRefreshMsg{candidates: candidates, restoreName: restoreName}
+	}
+}
+
+// storeForSource maps a candidate source to the appropriate store.
+func (m *Model) storeForSource(source conn.Source) *conn.Store {
+	if len(m.stores) == 0 {
+		return nil
+	}
+	switch source {
+	case conn.SourceProjectStore:
+		return m.stores[0]
+	case conn.SourceGlobalStore:
+		if len(m.stores) > 1 {
+			return m.stores[1]
+		}
+		return m.stores[0]
+	default:
+		return m.stores[0]
+	}
+}
+
+// handleConnFormSubmit processes a form submission (add or edit).
+func (m *Model) handleConnFormSubmit(msg connform.SubmitMsg) (Model, tea.Cmd) {
+	store := m.storeForSource(msg.Source)
+	if store == nil {
+		m.statusBar.SetError("no store available")
+		return *m, nil
+	}
+
+	cfg := msg.Config
+
+	// handle rename
+	if msg.IsEdit && msg.OldName != "" && msg.OldName != cfg.Name {
+		if err := store.Rename(msg.OldName, cfg.Name); err != nil {
+			m.statusBar.SetError("rename failed: " + err.Error())
+			return *m, nil
+		}
+		if m.creds != nil {
+			_ = m.creds.DeletePassword(msg.OldName)
+		}
+	}
+
+	if err := store.Add(cfg); err != nil {
+		m.statusBar.SetError("save failed: " + err.Error())
+		return *m, nil
+	}
+
+	if m.creds != nil {
+		if msg.Password != "" {
+			_ = m.creds.SetPassword(cfg.Name, msg.Password)
+		} else {
+			_ = m.creds.DeletePassword(cfg.Name)
+		}
+	}
+
+	m.statusBar.SetSuccess("connection saved: " + cfg.Name)
+	return *m, m.refreshConnSelector(cfg.Name)
+}
+
+// doDeleteConn deletes the pending connection candidate.
+func (m *Model) doDeleteConn() (Model, tea.Cmd) {
+	if m.pendingDeleteCandidate == nil {
+		return *m, nil
+	}
+	c := *m.pendingDeleteCandidate
+	m.pendingDeleteCandidate = nil
+
+	store := m.storeForSource(c.Source)
+	if store == nil {
+		m.statusBar.SetError("no store available")
+		return *m, nil
+	}
+
+	name := c.Config.Name
+	if err := store.Remove(name); err != nil {
+		m.statusBar.SetError("delete failed: " + err.Error())
+		return *m, nil
+	}
+	if m.creds != nil {
+		_ = m.creds.DeletePassword(name)
+	}
+
+	m.statusBar.SetSuccess("deleted: " + name)
+	return *m, m.refreshConnSelector("")
 }
 
 // setEditContext sets up editing metadata from table detail (PK columns, etc.).

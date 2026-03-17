@@ -112,9 +112,12 @@ func Validate(t *Theme) error {
 
 	check("data.null", c.Data.Null)
 	check("data.boolean", c.Data.Boolean)
+	check("data.bool_true", c.Data.BoolTrue)
+	check("data.bool_false", c.Data.BoolFalse)
 	check("data.number", c.Data.Number)
 	check("data.string", c.Data.String)
 	check("data.date", c.Data.Date)
+	check("data.uuid", c.Data.UUID)
 
 	check("ui.cursor", c.UI.Cursor)
 	check("ui.cursor_fg", c.UI.CursorFG)

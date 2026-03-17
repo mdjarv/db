@@ -52,8 +52,9 @@ func (m *Model) SetResult(columns []core.ResultColumn, rows [][]string, duration
 			title += " [" + c.TypeName + "]"
 		}
 		cols[i] = table.Column{
-			Title: title,
-			Width: autoWidth(c.Name, c.TypeName, rows, i),
+			Title:    title,
+			Width:    autoWidth(c.Name, c.TypeName, rows, i),
+			TypeHint: typeHint(c.TypeName, c.CompositeFields),
 		}
 	}
 	m.columns = columns
@@ -181,7 +182,7 @@ func (m *Model) updateNormal(km tea.KeyMsg) tea.Cmd {
 		m.keySeq.Start("d")
 	case "o":
 		m.keySeq.Start("o")
-	case "ctrl+z":
+	case "u", "ctrl+z":
 		return func() tea.Msg { return core.UndoMsg{} }
 	}
 	return nil
@@ -388,6 +389,31 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
+func typeHint(typeName string, compositeFields []core.CompositeField) table.TypeHint {
+	if len(compositeFields) > 0 {
+		return table.HintComposite
+	}
+	lower := strings.ToLower(typeName)
+	if strings.HasSuffix(lower, "[]") {
+		return table.HintArray
+	}
+	switch lower {
+	case "boolean", "bool":
+		return table.HintBool
+	case "integer", "int2", "int4", "int8", "bigint", "smallint",
+		"numeric", "decimal", "float4", "float8", "real", "double precision",
+		"serial", "bigserial", "smallserial", "money", "oid":
+		return table.HintNumber
+	case "date", "time", "timetz", "timestamp", "timestamptz", "interval":
+		return table.HintDate
+	case "uuid":
+		return table.HintUUID
+	case "json", "jsonb":
+		return table.HintJSON
+	}
+	return table.HintNone
+}
+
 func autoWidth(name, typeName string, rows [][]string, colIdx int) int {
 	headerLen := len(name)
 	if typeName != "" {
@@ -398,7 +424,7 @@ func autoWidth(name, typeName string, rows [][]string, colIdx int) int {
 	sampleSize := min(len(rows), 100)
 	for i := range sampleSize {
 		if colIdx < len(rows[i]) {
-			val := rows[i][colIdx]
+			val := table.SanitizeCell(rows[i][colIdx])
 			if table.IsNull(val) {
 				if 4 > w {
 					w = 4

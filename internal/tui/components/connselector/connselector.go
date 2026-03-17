@@ -24,6 +24,21 @@ type CancelMsg struct{}
 // QuitMsg signals the user wants to quit the app (q).
 type QuitMsg struct{}
 
+// AddMsg signals the user wants to add a new connection.
+type AddMsg struct {
+	Source conn.Source
+}
+
+// EditMsg signals the user wants to edit a connection.
+type EditMsg struct {
+	Candidate conn.Candidate
+}
+
+// DeleteMsg signals the user wants to delete a connection.
+type DeleteMsg struct {
+	Candidate conn.Candidate
+}
+
 // Model is the connection selector state.
 type Model struct {
 	active     bool
@@ -80,6 +95,27 @@ func (m *Model) Update(msg tea.KeyMsg) tea.Cmd {
 	case "enter":
 		c := m.candidates[m.cursor]
 		return func() tea.Msg { return SelectMsg{Candidate: c} }
+	case "a":
+		source := conn.SourceProjectStore
+		if m.cursor < len(m.candidates) {
+			s := m.candidates[m.cursor].Source
+			if s == conn.SourceProjectStore || s == conn.SourceGlobalStore {
+				source = s
+			}
+		}
+		return func() tea.Msg { return AddMsg{Source: source} }
+	case "e":
+		c := m.candidates[m.cursor]
+		if !isEditable(c) {
+			return nil
+		}
+		return func() tea.Msg { return EditMsg{Candidate: c} }
+	case "d":
+		c := m.candidates[m.cursor]
+		if !isEditable(c) {
+			return nil
+		}
+		return func() tea.Msg { return DeleteMsg{Candidate: c} }
 	case "q":
 		m.Close()
 		return func() tea.Msg { return QuitMsg{} }
@@ -175,7 +211,8 @@ func (m *Model) View(containerW, containerH int) string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, hintStyle.Render("j/k navigate  Enter select  q quit  Esc cancel"))
+	lines = append(lines, hintStyle.Render("j/k navigate  Enter select  a add  e edit  d delete"))
+	lines = append(lines, hintStyle.Render("q quit  Esc cancel"))
 
 	// Trim to fit.
 	maxLines := containerH - 6
@@ -196,6 +233,25 @@ func (m *Model) View(containerW, containerH int) string {
 		Render(content)
 
 	return lipgloss.Place(containerW, containerH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// Refresh updates the candidate list and restores cursor to the named connection.
+func (m *Model) Refresh(candidates []conn.Candidate, restoreName string) {
+	m.candidates = candidates
+	m.cursor = 0
+	for i, c := range candidates {
+		if c.Config.Name == restoreName {
+			m.cursor = i
+			return
+		}
+	}
+	if m.cursor >= len(candidates) && len(candidates) > 0 {
+		m.cursor = len(candidates) - 1
+	}
+}
+
+func isEditable(c conn.Candidate) bool {
+	return c.Source == conn.SourceProjectStore || c.Source == conn.SourceGlobalStore
 }
 
 func formatCandidate(c conn.Candidate) string {

@@ -17,7 +17,10 @@ type cmdHandler func(m *Model, args string) (tea.Model, tea.Cmd)
 var commandRegistry = map[string]cmdHandler{
 	"q":        cmdQuit,
 	"quit":     cmdQuit,
-	"w":        cmdExecute,
+	"w":        cmdCommit,
+	"write":    cmdCommit,
+	"run":      cmdExecute,
+	"exec":     cmdExecute,
 	"clear":    cmdClear,
 	"set":      cmdSet,
 	"commit":   cmdCommit,
@@ -47,7 +50,15 @@ func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func cmdQuit(m *Model, _ string) (tea.Model, tea.Cmd) {
+func cmdQuit(m *Model, args string) (tea.Model, tea.Cmd) {
+	if args == "!" {
+		return *m, tea.Quit
+	}
+	if m.changeBuf.Len() > 0 {
+		m.dialog.Open("quit", "Uncommitted changes",
+			fmt.Sprintf("%d pending changes will be lost. Quit? (use :q! to force)", m.changeBuf.Len()))
+		return *m, nil
+	}
 	return *m, tea.Quit
 }
 
@@ -74,8 +85,17 @@ func cmdCommit(m *Model, _ string) (tea.Model, tea.Cmd) {
 	return m.handleCommit()
 }
 
-func cmdRollback(m *Model, _ string) (tea.Model, tea.Cmd) {
-	return m.handleRollback()
+func cmdRollback(m *Model, args string) (tea.Model, tea.Cmd) {
+	if args == "!" {
+		return m.handleRollback()
+	}
+	if m.changeBuf.Len() == 0 {
+		m.statusBar.SetMessage("no pending changes")
+		return *m, nil
+	}
+	m.dialog.Open("rollback", "Discard changes?",
+		fmt.Sprintf("%d pending changes will be lost. (use :rollback! to force)", m.changeBuf.Len()))
+	return *m, nil
 }
 
 func cmdChanges(m *Model, _ string) (tea.Model, tea.Cmd) {
