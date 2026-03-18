@@ -145,6 +145,12 @@ Work is organized into phases. Within each phase, milestones can be worked on **
 |---|---|---|---|
 | M13 | in progress | [Integration & Polish](docs/m13-polish.md) | Integration tests, error handling, help system, keybinding cheatsheet |
 
+### Phase 6: Extended Features
+
+| Milestone | Status | Doc | Description |
+|---|---|---|---|
+| M14 | planned | [Database Dump](docs/m14-dump.md) | pg_dump wrapper with CLI progress bar and TUI progress modal |
+
 ## Remaining Work
 
 ### M12 (minor)
