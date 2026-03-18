@@ -31,6 +31,7 @@ import (
 	"github.com/mdjarv/db/internal/tui/components/resultview"
 	"github.com/mdjarv/db/internal/tui/components/statusbar"
 	"github.com/mdjarv/db/internal/tui/components/table"
+	"github.com/mdjarv/db/internal/tui/components/tabledetail"
 	"github.com/mdjarv/db/internal/tui/components/tablelist"
 	"github.com/mdjarv/db/internal/tui/core"
 	"github.com/mdjarv/db/internal/tui/pane"
@@ -95,6 +96,8 @@ type Model struct {
 	showHelp    bool // kept for test compat, mirrors helpOverlay.IsActive()
 	helpScroll  int  // kept for test compat
 	helpOverlay *helpoverlay.Model
+	tableDetail *tabledetail.Model
+	lastDetail  *core.TableDetailMsg
 	ready       bool
 	keySeq      core.KeySeq
 }
@@ -140,6 +143,7 @@ func New() Model {
 		dumpProgress: dialog.NewProgress(),
 		bufferList:   bufferlist.New(),
 		helpOverlay:  helpoverlay.New(),
+		tableDetail:  tabledetail.New(),
 		buffers:      bm,
 		changeBuf:    editor.NewChangeBuffer(),
 		leftRatio:    defaultLeftRatio,
@@ -249,6 +253,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.TableDetailMsg:
 		m.tableList.Update(msg)
+		m.lastDetail = &msg
 		return m, nil
 
 	case core.QueryRequestMsg:
@@ -1048,6 +1053,10 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.commandBar.Active() {
 		return m, m.commandBar.Update(msg)
 	}
+	if m.tableDetail.IsActive() {
+		m.tableDetail.Update(msg)
+		return m, nil
+	}
 	if m.helpOverlay.IsActive() {
 		m.helpOverlay.Update(msg)
 		m.showHelp = m.helpOverlay.IsActive()
@@ -1120,6 +1129,14 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleAction(action)
 	}
 
+	// d on table list opens detail overlay
+	if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.TableList && msg.String() == "d" {
+		if m.lastDetail != nil {
+			m.tableDetail.Open(m.lastDetail.Table, m.lastDetail.Columns, m.lastDetail.Indexes, m.lastDetail.Constraints, m.lastDetail.ForeignKeys)
+		}
+		return m, nil
+	}
+
 	// forward to active pane
 	active := m.panes.Active()
 	if active == nil {
@@ -1180,6 +1197,10 @@ func (m Model) View() string {
 	}
 	if m.connSelector.IsActive() {
 		return m.connSelector.View(m.width, m.height)
+	}
+
+	if m.tableDetail.IsActive() {
+		return m.tableDetail.View(m.width, m.height)
 	}
 
 	if m.helpOverlay.IsActive() {
