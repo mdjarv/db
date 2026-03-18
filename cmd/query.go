@@ -25,12 +25,14 @@ var (
 	queryFile     string
 	queryFormat   string
 	queryNoHeader bool
+	queryTimeout  int
 )
 
 func init() {
 	queryCmd.Flags().StringVarP(&queryFile, "file", "f", "", "read SQL from file")
 	queryCmd.Flags().StringVarP(&queryFormat, "format", "F", "table", "output format (table, csv, json, sql)")
 	queryCmd.Flags().BoolVar(&queryNoHeader, "no-header", false, "suppress column headers")
+	queryCmd.Flags().IntVar(&queryTimeout, "timeout", 0, "query timeout in seconds (0 = no timeout)")
 	rootCmd.AddCommand(queryCmd)
 }
 
@@ -40,8 +42,12 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		return wrapIO("resolve SQL", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if queryTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(queryTimeout)*time.Second)
+		defer cancel()
+	}
 
 	conn, err := connectFromFlags(cmd)
 	if err != nil {
@@ -52,6 +58,9 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	e := query.NewExecutor(conn, query.AutoCommit)
 	res, err := e.Execute(ctx, sql)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return wrapQuery("query timed out", fmt.Errorf("after %ds", queryTimeout))
+		}
 		return wrapQuery("execute", err)
 	}
 

@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -377,9 +379,17 @@ func (m *Model) handleCommitResult(msg commitResultMsg) (Model, tea.Cmd) {
 	return *m, nil
 }
 
-// handleSetCommand processes `:set` args for autocommit/noautocommit.
+// handleSetCommand processes `:set` args for autocommit/noautocommit/querytimeout.
 func (m *Model) handleSetCommand(args string) {
-	switch strings.TrimSpace(args) {
+	trimmed := strings.TrimSpace(args)
+
+	// handle key=value style: "querytimeout 10"
+	if strings.HasPrefix(trimmed, "querytimeout") {
+		m.handleSetQueryTimeout(strings.TrimPrefix(trimmed, "querytimeout"))
+		return
+	}
+
+	switch trimmed {
 	case "autocommit":
 		if m.changeBuf.Len() > 0 {
 			m.statusBar.SetMessage("warning: switching with pending changes! Changes will be applied immediately.")
@@ -396,6 +406,30 @@ func (m *Model) handleSetCommand(args string) {
 		m.statusBar.SetMessage("manual commit mode")
 	default:
 		m.statusBar.SetMessage("set: " + args)
+	}
+}
+
+// handleSetQueryTimeout parses and applies the querytimeout value.
+func (m *Model) handleSetQueryTimeout(val string) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		if m.queryTimeout == 0 {
+			m.statusBar.SetMessage("querytimeout=0 (no timeout)")
+		} else {
+			m.statusBar.SetMessage(fmt.Sprintf("querytimeout=%d", int(m.queryTimeout.Seconds())))
+		}
+		return
+	}
+	secs, err := strconv.Atoi(val)
+	if err != nil || secs < 0 {
+		m.statusBar.SetMessage("querytimeout: expected non-negative integer (seconds)")
+		return
+	}
+	m.queryTimeout = time.Duration(secs) * time.Second
+	if secs == 0 {
+		m.statusBar.SetMessage("query timeout disabled")
+	} else {
+		m.statusBar.SetMessage(fmt.Sprintf("query timeout: %ds", secs))
 	}
 }
 
