@@ -36,9 +36,11 @@ func runPing(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = c.Close(ctx) }()
 
-	if _, err := c.Query(ctx, "SELECT 1"); err != nil {
+	result, err := c.Query(ctx, "SELECT 1")
+	if err != nil {
 		return wrapQuery("ping failed", err)
 	}
+	result.Rows.Close()
 
 	fmt.Printf("OK (%s)\n", time.Since(start).Round(time.Millisecond))
 	return nil
