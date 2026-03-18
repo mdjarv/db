@@ -60,6 +60,8 @@ type Model struct {
 	creds                  *conn.CredentialStore
 	gitRoot                string
 	pendingDeleteCandidate *conn.Candidate
+	lastCandidate          *conn.Candidate // last successful connection, for reconnect
+	disconnected           bool            // true when connection lost
 
 	// data editing
 	changeBuf  *editor.ChangeBuffer
@@ -208,6 +210,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// M7: schema messages
 	case core.SchemaLoadedMsg:
+		if msg.Err != nil && db.IsConnectionError(msg.Err) {
+			return m.handleConnectionLost()
+		}
 		cmd := m.tableList.Update(msg)
 		if msg.Err != nil {
 			errCmd := m.statusBar.SetError("schema load failed: " + msg.Err.Error())
@@ -274,6 +279,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case core.QueryErrorMsg:
+		if db.IsConnectionError(msg.Err) {
+			return m.handleConnectionLost()
+		}
 		m.resultView.SetError(msg.Err)
 		errCmd := m.statusBar.SetError("Query error: " + msg.Err.Error())
 		buf := m.buffers.Active()
@@ -378,6 +386,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.conn = msg.Conn
 		m.inspector = msg.Inspector
+		m.disconnected = false
+		c := msg.Candidate
+		m.lastCandidate = &c
 		m.statusBar.SetConn(msg.ConnInfo)
 		m.changeBuf.Clear()
 		m.resultView.ClearModified()
@@ -389,6 +400,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.ConnectErrorMsg:
 		errCmd := m.statusBar.SetError("connection failed: " + msg.Err.Error())
+		if m.disconnected {
+			// reconnect attempt failed — offer retry
+			m.dialog.Open("reconnect", "Reconnect failed", "Try again?")
+			return m, errCmd
+		}
 		if m.conn == nil {
 			return m, tea.Batch(errCmd, m.discoverConnections())
 		}
@@ -660,6 +676,26 @@ func (m Model) discoverConnections() tea.Cmd {
 		})
 		return core.ConnSelectorMsg{Candidates: candidates}
 	}
+}
+
+// handleConnectionLost marks the connection as lost and shows the reconnect dialog.
+func (m *Model) handleConnectionLost() (Model, tea.Cmd) {
+	m.disconnected = true
+	m.conn = nil
+	m.inspector = nil
+	m.statusBar.SetConn("")
+	m.statusBar.SetError("connection lost")
+	if m.lastCandidate != nil {
+		cfg := m.lastCandidate.Config
+		label := cfg.Name
+		if label == "" {
+			label = fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
+		}
+		m.dialog.Open("reconnect", "Connection lost", "Reconnect to "+label+"?")
+	} else {
+		m.dialog.Open("reconnect", "Connection lost", "Reconnect?")
+	}
+	return *m, nil
 }
 
 func (m Model) connectTo(candidate conn.Candidate) tea.Cmd {

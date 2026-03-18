@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mdjarv/db/internal/conn"
+	"github.com/mdjarv/db/internal/db"
 	"github.com/mdjarv/db/internal/editor"
 	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
@@ -297,6 +298,12 @@ func (m *Model) handleDialogResult(msg dialog.ResultMsg) (Model, tea.Cmd) {
 			return m.handleRollback()
 		}
 		m.statusBar.SetMessage("rollback cancelled")
+	case "reconnect":
+		if msg.Confirmed && m.lastCandidate != nil {
+			m.statusBar.SetMessage("reconnecting...")
+			return *m, m.connectTo(*m.lastCandidate)
+		}
+		m.statusBar.SetError("disconnected — use :connect to reconnect")
 	case "quit":
 		if msg.Confirmed {
 			return *m, tea.Quit
@@ -363,6 +370,9 @@ type commitResultMsg struct {
 // handleCommitResult processes the result of applying changes.
 func (m *Model) handleCommitResult(msg commitResultMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
+		if db.IsConnectionError(msg.err) {
+			return m.handleConnectionLost()
+		}
 		errCmd := m.statusBar.SetError(fmt.Sprintf("commit failed (%d applied): %s", msg.applied, msg.err))
 		return *m, errCmd
 	}
