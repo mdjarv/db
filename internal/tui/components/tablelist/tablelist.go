@@ -100,6 +100,7 @@ func (m *Model) clampOffset() {
 
 func (m *Model) listViewHeight() int {
 	h := m.height - 2 // border
+	h--               // footer hint line
 	if m.filtering {
 		h-- // filter input line
 	}
@@ -345,6 +346,17 @@ func (m *Model) listView() string {
 		sb.WriteString("\n/" + m.filter)
 	}
 
+	// pad to push footer to bottom
+	rendered := strings.Count(sb.String(), "\n") + 1
+	total := m.height - 2 // content area inside border
+	for rendered < total {
+		sb.WriteByte('\n')
+		rendered++
+	}
+
+	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	sb.WriteString(hintStyle.Render("Space:actions  /:filter"))
+
 	return sb.String()
 }
 
@@ -409,14 +421,29 @@ func (m *Model) detailView() string {
 	}
 
 	// clamp detail scroll offset
-	vh := max(m.height-2, 1)
+	vh := max(m.height-3, 1) // -2 border, -1 footer
 	if m.detail.offset > max(len(lines)-vh, 0) {
 		m.detail.offset = max(len(lines)-vh, 0)
 	}
 
 	end := min(m.detail.offset+vh, len(lines))
 	visible := lines[m.detail.offset:end]
-	return strings.Join(visible, "\n")
+
+	var sb strings.Builder
+	sb.WriteString(strings.Join(visible, "\n"))
+
+	// pad to push footer to bottom
+	rendered := len(visible)
+	total := m.height - 2
+	for rendered < total {
+		sb.WriteByte('\n')
+		rendered++
+	}
+
+	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	sb.WriteString(hintStyle.Render("Esc:back"))
+
+	return sb.String()
 }
 
 func truncate(s string, maxW int) string {

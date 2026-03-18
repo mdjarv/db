@@ -20,6 +20,7 @@ import (
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/connselector"
+	"github.com/mdjarv/db/internal/tui/components/contextmenu"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/helpoverlay"
@@ -49,6 +50,7 @@ type Model struct {
 	commandBar   *commandbar.Model
 	dialog       *dialog.Model
 	editDialog   *editdialog.Model
+	contextMenu  *contextmenu.Model
 	connSelector *connselector.Model
 	connForm     *connform.Model
 	buffers      *BufferManager
@@ -118,6 +120,7 @@ func New() Model {
 		commandBar:   commandbar.New(),
 		dialog:       dialog.New(),
 		editDialog:   editdialog.New(),
+		contextMenu:  contextmenu.New(),
 		connSelector: connselector.New(),
 		connForm:     connform.New(),
 		helpOverlay:  helpoverlay.New(),
@@ -837,6 +840,13 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.dialog.IsActive() {
 		return m, m.dialog.Update(msg)
 	}
+	if m.contextMenu.IsActive() {
+		actionID, selected := m.contextMenu.Update(msg)
+		if selected {
+			return m.handleContextMenuAction(actionID)
+		}
+		return m, nil
+	}
 	if m.connSelector.IsActive() {
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -891,6 +901,12 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.mode == core.ModeNormal && msg.String() == "g" {
 		m.keySeq.Start("g")
+		return m, nil
+	}
+
+	// Space on table list opens context menu
+	if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.TableList && msg.String() == " " {
+		m.openTableContextMenu()
 		return m, nil
 	}
 
@@ -967,6 +983,10 @@ func (m Model) View() string {
 		return m.editDialog.View(m.width, m.height)
 	}
 
+	if m.contextMenu.IsActive() {
+		return m.contextMenu.View(m.width, m.height)
+	}
+
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,
 		m.queryEditor.View(),
 		m.resultView.View(),
@@ -995,6 +1015,67 @@ func (m *Model) OpenHelp(topic string) {
 		m.helpOverlay.OpenTopic(topic)
 	}
 	m.showHelp = true
+}
+
+// openTableContextMenu opens the context menu for the selected table.
+func (m *Model) openTableContextMenu() {
+	m.contextMenu.Open([]contextmenu.MenuItem{
+		{Label: "Query (SELECT *)", ActionID: "query"},
+		{Label: "Describe schema", ActionID: "describe"},
+		{Label: "Dump table", ActionID: "dump-table", Hint: "..."},
+		{Label: "Dump schema only", ActionID: "dump-schema", Hint: "..."},
+		{Label: "Copy table name", ActionID: "copy-name"},
+		{Label: "Refresh schema", ActionID: "refresh"},
+	})
+}
+
+// handleContextMenuAction dispatches the selected context menu action.
+func (m Model) handleContextMenuAction(actionID string) (tea.Model, tea.Cmd) {
+	switch actionID {
+	case "query":
+		// reuse the same logic as Enter on table list
+		if t, ok := m.selectedTable(); ok {
+			sql := fmt.Sprintf("SELECT * FROM %s LIMIT 100;", quoteTableIdent(t.Schema, t.Name))
+			return m, func() tea.Msg { return core.QueryRequestMsg{SQL: sql} }
+		}
+	case "describe":
+		m.tableList.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	case "dump-table":
+		if t, ok := m.selectedTable(); ok {
+			name := quoteTableIdent(t.Schema, t.Name)
+			return m, func() tea.Msg { return core.DumpTableMsg{Table: name} }
+		}
+	case "dump-schema":
+		if t, ok := m.selectedTable(); ok {
+			name := quoteTableIdent(t.Schema, t.Name)
+			return m, func() tea.Msg { return core.DumpSchemaMsg{Table: name} }
+		}
+	case "copy-name":
+		if t, ok := m.selectedTable(); ok {
+			return m, func() tea.Msg { return core.YankMsg{Content: t.Name} }
+		}
+	case "refresh":
+		return m, func() tea.Msg { return core.RefreshSchemaMsg{} }
+	}
+	return m, nil
+}
+
+// selectedTable returns the currently selected table from the table list.
+func (m *Model) selectedTable() (schema.Table, bool) {
+	filtered := m.tableList.Filtered()
+	cursor := m.tableList.Cursor()
+	if len(filtered) == 0 || cursor >= len(filtered) {
+		return schema.Table{}, false
+	}
+	return filtered[cursor], true
+}
+
+// quoteTableIdent formats a schema.table identifier.
+func quoteTableIdent(schemaName, tableName string) string {
+	if schemaName != "" && schemaName != "public" {
+		return schemaName + "." + tableName
+	}
+	return tableName
 }
 
 type paneAdapter struct {
