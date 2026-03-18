@@ -12,8 +12,9 @@ const defaultMaxBuffers = 10
 
 // Buffer holds the state of a single query buffer.
 type Buffer struct {
-	Query    string
-	Modified bool
+	Query             string
+	LastExecutedQuery string // query text at last execution
+	Modified          bool
 
 	// result state
 	Columns  []core.ResultColumn

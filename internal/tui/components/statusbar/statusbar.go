@@ -35,6 +35,7 @@ type Model struct {
 	txMode       string
 	bufIdx       int
 	bufCnt       int
+	bufModified  bool
 	width        int
 	errorID      int
 	errorTimeout time.Duration
@@ -113,6 +114,9 @@ func (m *Model) SetTxMode(s string) { m.txMode = s }
 // SetBuffer sets the buffer indicator display.
 func (m *Model) SetBuffer(idx, count int) { m.bufIdx = idx; m.bufCnt = count }
 
+// SetBufferModified sets whether the active buffer has been modified.
+func (m *Model) SetBufferModified(modified bool) { m.bufModified = modified }
+
 // View renders the status bar.
 func (m *Model) View() string {
 	s := theme.Current().Styles
@@ -139,11 +143,15 @@ func (m *Model) View() string {
 	txStr := s.TxFG.Render(fmt.Sprintf("tx:%s", m.txMode))
 
 	var bufStr string
-	if m.bufCnt > 1 {
+	if m.bufCnt > 1 || m.bufModified {
 		bufStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).
 			Padding(0, 1)
-		bufStr = bufStyle.Render(fmt.Sprintf("[%d/%d]", m.bufIdx, m.bufCnt))
+		mod := ""
+		if m.bufModified {
+			mod = "[+]"
+		}
+		bufStr = bufStyle.Render(fmt.Sprintf("[%d/%d]%s", m.bufIdx, m.bufCnt, mod))
 	}
 
 	left := modeStr + connStr + bufStr
