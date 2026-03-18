@@ -154,6 +154,21 @@ type ConnectErrorMsg struct {
 	Err error
 }
 
+// ContextMenuActionMsg carries the action ID selected from the context menu.
+type ContextMenuActionMsg struct {
+	ActionID string
+}
+
+// DumpTableMsg requests a table data dump (not yet implemented).
+type DumpTableMsg struct {
+	Table string
+}
+
+// DumpSchemaMsg requests a schema-only dump (not yet implemented).
+type DumpSchemaMsg struct {
+	Table string
+}
+
 // ClearErrorMsg signals that a timed error message should be cleared.
 type ClearErrorMsg struct {
 	// ID matches the error instance so stale clears are ignored.
