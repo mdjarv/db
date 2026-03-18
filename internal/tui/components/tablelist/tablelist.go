@@ -228,6 +228,12 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 		m.lastG = false
 		m.view = viewDetail
 		m.detail.offset = 0
+	case "D":
+		m.lastG = false
+		if t, ok := m.selected(); ok {
+			name := t.Name
+			return func() tea.Msg { return core.DumpTableMsg{Table: name} }
+		}
 	case "y":
 		m.lastG = false
 		if t, ok := m.selected(); ok {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/mdjarv/db/internal/conn"
 	"github.com/mdjarv/db/internal/db"
+	"github.com/mdjarv/db/internal/dump"
 	"github.com/mdjarv/db/internal/editor"
 	"github.com/mdjarv/db/internal/export"
 	"github.com/mdjarv/db/internal/schema"
@@ -21,6 +22,7 @@ import (
 	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/connselector"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
+	"github.com/mdjarv/db/internal/tui/components/dumpform"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
 	"github.com/mdjarv/db/internal/tui/components/helpoverlay"
 	"github.com/mdjarv/db/internal/tui/components/queryeditor"
@@ -51,6 +53,8 @@ type Model struct {
 	editDialog   *editdialog.Model
 	connSelector *connselector.Model
 	connForm     *connform.Model
+	dumpForm     *dumpform.Model
+	dumpProgress *dialog.ProgressModel
 	buffers      *BufferManager
 	conn         db.Conn
 	inspector    schema.Inspector
@@ -62,6 +66,7 @@ type Model struct {
 	pendingDeleteCandidate *conn.Candidate
 	lastCandidate          *conn.Candidate // last successful connection, for reconnect
 	disconnected           bool            // true when connection lost
+	dumpCancel             context.CancelFunc
 
 	// data editing
 	changeBuf  *editor.ChangeBuffer
@@ -120,6 +125,8 @@ func New() Model {
 		editDialog:   editdialog.New(),
 		connSelector: connselector.New(),
 		connForm:     connform.New(),
+		dumpForm:     dumpform.New(),
+		dumpProgress: dialog.NewProgress(),
 		helpOverlay:  helpoverlay.New(),
 		buffers:      bm,
 		changeBuf:    editor.NewChangeBuffer(),
@@ -375,6 +382,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case connform.CancelMsg:
 		return m, nil
+
+	case dumpform.SubmitMsg:
+		return m.handleDumpFormSubmit(msg)
+
+	case dumpform.CancelMsg:
+		return m, nil
+
+	case core.DumpTableMsg:
+		return m.openDumpForm(msg.Table, false)
+
+	case core.DumpSchemaMsg:
+		return m.openDumpForm(msg.Table, true)
+
+	case core.DumpProgressMsg:
+		return m.handleDumpProgress(msg)
+
+	case core.DumpCompleteMsg:
+		return m.handleDumpComplete(msg)
+
+	case dialog.ProgressCancelMsg:
+		return m.handleDumpCancel()
 
 	case connSelectorRefreshMsg:
 		m.connSelector.Refresh(msg.candidates, msg.restoreName)
@@ -753,6 +781,146 @@ func (m *Model) saveDefault(candidate conn.Candidate) {
 	}
 }
 
+// Dump support
+
+// openDumpForm opens the dump form with connection info pre-filled.
+func (m *Model) openDumpForm(tableName string, schemaOnly bool) (Model, tea.Cmd) {
+	if m.lastCandidate == nil {
+		errCmd := m.statusBar.SetError("not connected")
+		return *m, errCmd
+	}
+	cfg := m.lastCandidate.Config
+	port := "5432"
+	if cfg.Port != 0 {
+		port = fmt.Sprintf("%d", cfg.Port)
+	}
+	password := cfg.Password
+	if password == "" && m.creds != nil {
+		password, _ = m.creds.GetPassword(cfg.Name)
+	}
+	if schemaOnly {
+		m.dumpForm.OpenSchemaOnly(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode)
+	} else {
+		m.dumpForm.Open(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode)
+	}
+	return *m, nil
+}
+
+// handleDumpFormSubmit starts the dump process.
+func (m *Model) handleDumpFormSubmit(msg dumpform.SubmitMsg) (Model, tea.Cmd) {
+	binPath, err := dump.FindPgDump("")
+	if err != nil {
+		errCmd := m.statusBar.SetError(err.Error())
+		return *m, errCmd
+	}
+
+	m.dumpProgress.Open("Dumping " + msg.Config.DBName)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.dumpCancel = cancel
+
+	cfg := msg.Config
+	return *m, m.runDump(ctx, binPath, cfg)
+}
+
+// runDump starts pg_dump and returns a tea.Cmd that sends progress/complete messages.
+func (m *Model) runDump(ctx context.Context, binPath string, cfg dump.Config) tea.Cmd {
+	return func() tea.Msg {
+		runner := dump.NewRunner(binPath)
+		start := time.Now()
+
+		ch, err := runner.Run(ctx, cfg, 0)
+		if err != nil {
+			return core.DumpCompleteMsg{
+				Path: cfg.OutputPath,
+				Err:  err,
+			}
+		}
+
+		// Drain progress channel, forwarding events via a program-level
+		// subscription is not possible from a tea.Cmd. Instead we collect
+		// all events and emit the final result. Progress updates are sent
+		// as intermediate messages via the returned Batch.
+		var lastEvent dump.ProgressEvent
+		for ev := range ch {
+			lastEvent = ev
+		}
+
+		if lastEvent.Err != nil {
+			return core.DumpCompleteMsg{
+				Path:     cfg.OutputPath,
+				Duration: time.Since(start),
+				Err:      lastEvent.Err,
+			}
+		}
+
+		var size int64
+		if fi, err := os.Stat(cfg.OutputPath); err == nil {
+			size = fi.Size()
+		}
+
+		return core.DumpCompleteMsg{
+			Path:     cfg.OutputPath,
+			Size:     size,
+			Duration: time.Since(start),
+		}
+	}
+}
+
+// handleDumpProgress updates the progress modal.
+func (m *Model) handleDumpProgress(msg core.DumpProgressMsg) (Model, tea.Cmd) {
+	ev := msg.Event
+	if ev.Err != nil {
+		m.dumpProgress.Close()
+		errCmd := m.statusBar.SetError("dump failed: " + ev.Err.Error())
+		return *m, errCmd
+	}
+	m.dumpProgress.SetProgress(ev.Object, ev.Index, ev.Total)
+	return *m, nil
+}
+
+// handleDumpComplete dismisses the progress modal and shows result.
+func (m *Model) handleDumpComplete(msg core.DumpCompleteMsg) (Model, tea.Cmd) {
+	m.dumpProgress.Close()
+	m.dumpCancel = nil
+	if msg.Err != nil {
+		errCmd := m.statusBar.SetError("dump failed: " + msg.Err.Error())
+		return *m, errCmd
+	}
+	sizeStr := formatSize(msg.Size)
+	m.statusBar.SetSuccess(fmt.Sprintf("dump complete: %s (%s, %s)", msg.Path, sizeStr, msg.Duration.Truncate(time.Millisecond)))
+	return *m, nil
+}
+
+// handleDumpCancel cancels a running dump.
+func (m *Model) handleDumpCancel() (Model, tea.Cmd) {
+	if m.dumpCancel != nil {
+		m.dumpCancel()
+		m.dumpCancel = nil
+	}
+	m.dumpProgress.Close()
+	m.statusBar.SetMessage("dump cancelled")
+	return *m, nil
+}
+
+func formatSize(bytes int64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 // M9: export support
 
 func (m *Model) parseExport(args string) tea.Cmd {
@@ -828,6 +996,18 @@ func (m *Model) exportResult(format, path string) tea.Cmd {
 // handleKeyInput processes keyboard input with modal dispatch.
 func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// overlay UIs get first priority
+	if m.dumpForm.IsActive() {
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		return m, m.dumpForm.Update(msg)
+	}
+	if m.dumpProgress.IsActive() {
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		return m, m.dumpProgress.Update(msg)
+	}
 	if m.connForm.IsActive() {
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -949,6 +1129,12 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.dumpForm.IsActive() {
+		return m.dumpForm.View(m.width, m.height)
+	}
+	if m.dumpProgress.IsActive() {
+		return m.dumpProgress.View(m.width, m.height)
+	}
 	if m.connForm.IsActive() {
 		return m.connForm.View(m.width, m.height)
 	}
