@@ -24,7 +24,7 @@ func init() {
 func runTables(cmd *cobra.Command, _ []string) error {
 	conn, err := connectFromFlags(cmd)
 	if err != nil {
-		return err
+		return err // already wrapped
 	}
 	defer func() { _ = conn.Close(cmd.Context()) }()
 
@@ -33,7 +33,7 @@ func runTables(cmd *cobra.Command, _ []string) error {
 
 	tables, err := insp.Tables(cmd.Context(), schemaName)
 	if err != nil {
-		return err
+		return wrapQuery("list tables", err)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

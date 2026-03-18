@@ -171,6 +171,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalcLayout()
 		return m, nil
 
+	case core.ClearErrorMsg:
+		m.statusBar.HandleClearError(msg)
+		return m, nil
+
 	case commandbar.ExecuteMsg:
 		return m.handleCommand(msg)
 
@@ -201,10 +205,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case core.SchemaLoadedMsg:
 		cmd := m.tableList.Update(msg)
 		if msg.Err != nil {
-			m.statusBar.SetError("schema load failed: " + msg.Err.Error())
-		} else {
-			m.statusBar.SetSuccess(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
+			errCmd := m.statusBar.SetError("schema load failed: " + msg.Err.Error())
+			return m, tea.Batch(cmd, errCmd)
 		}
+		m.statusBar.SetSuccess(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
 		return m, cmd
 
 	case core.TableSelectedMsg:
@@ -266,21 +270,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.QueryErrorMsg:
 		m.resultView.SetError(msg.Err)
-		m.statusBar.SetError("Query error: " + msg.Err.Error())
+		errCmd := m.statusBar.SetError("Query error: " + msg.Err.Error())
 		buf := m.buffers.Active()
 		buf.HasData = false
 		buf.ErrMsg = msg.Err.Error()
-		return m, nil
+		return m, errCmd
 
 	case core.ExportRequestMsg:
 		return m, m.exportResult(msg.Format, msg.Path)
 
 	case exportResultMsg:
 		if msg.err != nil {
-			m.statusBar.SetError("export failed: " + msg.err.Error())
-		} else {
-			m.statusBar.SetSuccess("exported to " + msg.path)
+			errCmd := m.statusBar.SetError("export failed: " + msg.err.Error())
+			return m, errCmd
 		}
+		m.statusBar.SetSuccess("exported to " + msg.path)
 		return m, nil
 
 	case core.EditRequestMsg:
@@ -333,8 +337,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case connselector.AddMsg:
 		if len(m.stores) == 0 {
-			m.statusBar.SetError("no connection store available")
-			return m, nil
+			errCmd := m.statusBar.SetError("no connection store available")
+			return m, errCmd
 		}
 		m.connForm.OpenAdd(msg.Source)
 		return m, nil
@@ -379,11 +383,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.loadSchema()
 
 	case core.ConnectErrorMsg:
-		m.statusBar.SetError("connection failed: " + msg.Err.Error())
+		errCmd := m.statusBar.SetError("connection failed: " + msg.Err.Error())
 		if m.conn == nil {
-			return m, m.discoverConnections()
+			return m, tea.Batch(errCmd, m.discoverConnections())
 		}
-		return m, nil
+		return m, errCmd
 
 	case core.YankMsg:
 		m.mode = core.ModeNormal
@@ -392,10 +396,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case yankResultMsg:
 		if msg.err != nil {
-			m.statusBar.SetError("yank failed: " + msg.err.Error())
-		} else {
-			m.statusBar.SetSuccess("yanked to clipboard")
+			errCmd := m.statusBar.SetError("yank failed: " + msg.err.Error())
+			return m, errCmd
 		}
+		m.statusBar.SetSuccess("yanked to clipboard")
 		return m, nil
 
 	case tea.KeyMsg:

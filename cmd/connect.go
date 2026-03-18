@@ -98,13 +98,13 @@ func runConnectAdd(cmd *cobra.Command, _ []string) error {
 
 	name := prompt(scanner, "Name", "")
 	if name == "" {
-		return fmt.Errorf("name is required")
+		return &CLIError{Code: ExitGeneral, Message: "name is required"}
 	}
 	host := prompt(scanner, "Host", "localhost")
 	portStr := prompt(scanner, "Port", "5432")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return fmt.Errorf("invalid port: %w", err)
+		return &CLIError{Code: ExitGeneral, Message: "invalid port", Err: err}
 	}
 	user := prompt(scanner, "User", "")
 	password := prompt(scanner, "Password", "")
@@ -242,7 +242,7 @@ func runConnectEdit(cmd *cobra.Command, args []string) error {
 	portStr := prompt(scanner, "Port", strconv.Itoa(existing.Port))
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return fmt.Errorf("invalid port: %w", err)
+		return &CLIError{Code: ExitGeneral, Message: "invalid port", Err: err}
 	}
 	user := prompt(scanner, "User", existing.User)
 	password := prompt(scanner, "Password (leave blank to keep)", "")

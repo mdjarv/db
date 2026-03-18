@@ -39,8 +39,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	if err == nil {
 		c, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "connection error: %v\n", err)
-			return err
+			return classifyConnError(err)
 		}
 		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
 		insp := schema.NewPostgresInspector(c)

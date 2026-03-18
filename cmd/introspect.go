@@ -25,7 +25,7 @@ func init() {
 func runIntrospect(cmd *cobra.Command, args []string) error {
 	conn, err := connectFromFlags(cmd)
 	if err != nil {
-		return err
+		return err // already wrapped
 	}
 	defer func() { _ = conn.Close(cmd.Context()) }()
 
@@ -37,7 +37,7 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	q := fmt.Sprintf("SELECT * FROM %s.%s LIMIT 0", quoteIdent(schemaName), quoteIdent(table))
 	result, err := conn.Query(ctx, q)
 	if err != nil {
-		return err
+		return wrapQuery("introspect", err)
 	}
 	result.Rows.Close()
 

@@ -23,7 +23,7 @@ func init() {
 func runPing(cmd *cobra.Command, _ []string) error {
 	cfg, err := resolveConnection(cmd)
 	if err != nil {
-		return err
+		return classifyConnError(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -32,12 +32,12 @@ func runPing(cmd *cobra.Command, _ []string) error {
 	start := time.Now()
 	c, err := db.Open(ctx, "postgres", cfg.DSN())
 	if err != nil {
-		return fmt.Errorf("connect failed: %w", err)
+		return classifyConnError(err)
 	}
 	defer func() { _ = c.Close(ctx) }()
 
 	if _, err := c.Query(ctx, "SELECT 1"); err != nil {
-		return fmt.Errorf("ping failed: %w", err)
+		return wrapQuery("ping failed", err)
 	}
 
 	fmt.Printf("OK (%s)\n", time.Since(start).Round(time.Millisecond))

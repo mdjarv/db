@@ -27,7 +27,7 @@ func init() {
 func runDescribe(cmd *cobra.Command, args []string) error {
 	conn, err := connectFromFlags(cmd)
 	if err != nil {
-		return err
+		return err // already wrapped
 	}
 	defer func() { _ = conn.Close(cmd.Context()) }()
 
@@ -38,19 +38,19 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 
 	cols, err := insp.Columns(ctx, schemaName, table)
 	if err != nil {
-		return err
+		return wrapQuery("describe columns", err)
 	}
 	indexes, err := insp.Indexes(ctx, schemaName, table)
 	if err != nil {
-		return err
+		return wrapQuery("describe indexes", err)
 	}
 	constraints, err := insp.Constraints(ctx, schemaName, table)
 	if err != nil {
-		return err
+		return wrapQuery("describe constraints", err)
 	}
 	fks, err := insp.ForeignKeys(ctx, schemaName, table)
 	if err != nil {
-		return err
+		return wrapQuery("describe foreign keys", err)
 	}
 
 	w := os.Stdout

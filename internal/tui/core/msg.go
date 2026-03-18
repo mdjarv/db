@@ -153,3 +153,9 @@ type ConnectedMsg struct {
 type ConnectErrorMsg struct {
 	Err error
 }
+
+// ClearErrorMsg signals that a timed error message should be cleared.
+type ClearErrorMsg struct {
+	// ID matches the error instance so stale clears are ignored.
+	ID int
+}
