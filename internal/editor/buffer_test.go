@@ -1,6 +1,9 @@
 package editor
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func TestChangeBuffer_Add(t *testing.T) {
 	b := NewChangeBuffer()
@@ -149,5 +152,115 @@ func TestPKEqual(t *testing.T) {
 	c := PKValue{Columns: []string{"id"}, Values: []any{1}}
 	if pkEqual(a, c) {
 		t.Error("expected not equal (different length)")
+	}
+}
+
+func TestChangeBuffer_ChangesCopyIsolation(t *testing.T) {
+	b := NewChangeBuffer()
+	b.Add(Change{Kind: ChangeInsert, Table: "t", Schema: "s"})
+	snapshot := b.Changes()
+
+	b.Add(Change{Kind: ChangeInsert, Table: "t2", Schema: "s"})
+
+	if len(snapshot) != 1 {
+		t.Fatalf("snapshot should be isolated from buffer mutations, got len=%d", len(snapshot))
+	}
+	if b.Len() != 2 {
+		t.Fatalf("expected buffer len=2, got %d", b.Len())
+	}
+}
+
+func TestChangeBuffer_RemoveOutOfBounds(t *testing.T) {
+	b := NewChangeBuffer()
+	b.Add(Change{Kind: ChangeInsert, Table: "t", Schema: "s"})
+
+	// No-op, no panic
+	b.Remove(-1)
+	b.Remove(5)
+	if b.Len() != 1 {
+		t.Fatalf("expected 1 after out-of-bounds removes, got %d", b.Len())
+	}
+}
+
+func TestChangeBuffer_IsInsertedRow(t *testing.T) {
+	b := NewChangeBuffer()
+	b.Add(Change{Kind: ChangeInsert, Table: "t", Schema: "s", Row: map[string]any{"a": 1}})
+	b.Add(Change{Kind: ChangeDelete, Table: "t", Schema: "s"})
+	b.Add(Change{Kind: ChangeInsert, Table: "t", Schema: "s", Row: map[string]any{"a": 2}})
+
+	if !b.IsInsertedRow("t", "s", 0) {
+		t.Error("expected idx 0 to be inserted")
+	}
+	if !b.IsInsertedRow("t", "s", 1) {
+		t.Error("expected idx 1 to be inserted")
+	}
+	if b.IsInsertedRow("t", "s", 2) {
+		t.Error("expected idx 2 to not exist")
+	}
+}
+
+func TestChangeBuffer_SerializedConcurrentAccess(t *testing.T) {
+	// ChangeBuffer is not thread-safe by design; this test verifies
+	// correct behavior under serialized concurrent access (mutex-guarded).
+	b := NewChangeBuffer()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	const writers = 100
+	wg.Add(writers)
+	for i := 0; i < writers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			mu.Lock()
+			defer mu.Unlock()
+			b.Add(Change{
+				Kind: ChangeInsert, Table: "t", Schema: "s",
+				Row: map[string]any{"id": id},
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	if b.Len() != writers {
+		t.Fatalf("expected %d changes, got %d", writers, b.Len())
+	}
+
+	// Concurrent reads with lock
+	var wg2 sync.WaitGroup
+	const readers = 50
+	wg2.Add(readers)
+	for i := 0; i < readers; i++ {
+		go func() {
+			defer wg2.Done()
+			mu.Lock()
+			defer mu.Unlock()
+			changes := b.Changes()
+			if len(changes) != writers {
+				t.Errorf("expected %d changes in snapshot, got %d", writers, len(changes))
+			}
+		}()
+	}
+	wg2.Wait()
+}
+
+func TestChangeBuffer_CollapseCompositePK(t *testing.T) {
+	b := NewChangeBuffer()
+	pk := PKValue{Columns: []string{"a", "b"}, Values: []any{1, 2}}
+
+	b.Add(Change{Kind: ChangeUpdate, Table: "t", Schema: "s", PK: pk, Column: "val", OldValue: "x", NewValue: "y"})
+	b.Add(Change{Kind: ChangeUpdate, Table: "t", Schema: "s", PK: pk, Column: "val", OldValue: "x", NewValue: "z"})
+
+	if b.Len() != 1 {
+		t.Fatalf("expected 1 collapsed, got %d", b.Len())
+	}
+	if b.Changes()[0].NewValue != "z" {
+		t.Fatalf("expected NewValue=z, got %v", b.Changes()[0].NewValue)
+	}
+
+	// Different composite PK should not collapse
+	pk2 := PKValue{Columns: []string{"a", "b"}, Values: []any{1, 3}}
+	b.Add(Change{Kind: ChangeUpdate, Table: "t", Schema: "s", PK: pk2, Column: "val", NewValue: "w"})
+	if b.Len() != 2 {
+		t.Fatalf("expected 2, got %d", b.Len())
 	}
 }
