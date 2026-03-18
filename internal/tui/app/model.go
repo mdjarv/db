@@ -21,6 +21,7 @@ import (
 	"github.com/mdjarv/db/internal/tui/components/connselector"
 	"github.com/mdjarv/db/internal/tui/components/dialog"
 	"github.com/mdjarv/db/internal/tui/components/editdialog"
+	"github.com/mdjarv/db/internal/tui/components/helpoverlay"
 	"github.com/mdjarv/db/internal/tui/components/queryeditor"
 	"github.com/mdjarv/db/internal/tui/components/resultview"
 	"github.com/mdjarv/db/internal/tui/components/statusbar"
@@ -28,7 +29,6 @@ import (
 	"github.com/mdjarv/db/internal/tui/components/tablelist"
 	"github.com/mdjarv/db/internal/tui/core"
 	"github.com/mdjarv/db/internal/tui/pane"
-	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 const (
@@ -69,13 +69,14 @@ type Model struct {
 	editPKIdx  []int               // PK column indices in result set
 	editCols   []schema.ColumnInfo // column info for current result
 
-	width      int
-	height     int
-	leftRatio  float64
-	showHelp   bool
-	helpScroll int
-	ready      bool
-	keySeq     core.KeySeq
+	width       int
+	height      int
+	leftRatio   float64
+	showHelp    bool // kept for test compat, mirrors helpOverlay.IsActive()
+	helpScroll  int  // kept for test compat
+	helpOverlay *helpoverlay.Model
+	ready       bool
+	keySeq      core.KeySeq
 }
 
 // Options configures the app model.
@@ -114,6 +115,7 @@ func New() Model {
 		editDialog:   editdialog.New(),
 		connSelector: connselector.New(),
 		connForm:     connform.New(),
+		helpOverlay:  helpoverlay.New(),
 		buffers:      bm,
 		changeBuf:    editor.NewChangeBuffer(),
 		leftRatio:    defaultLeftRatio,
@@ -425,7 +427,12 @@ func (m Model) handleAction(action Action) (tea.Model, tea.Cmd) {
 		m.statusBar.SetMode(m.mode)
 		m.commandBar.Activate()
 	case ActionHelp:
-		m.showHelp = !m.showHelp
+		if m.helpOverlay.IsActive() {
+			m.helpOverlay.Close()
+		} else {
+			m.helpOverlay.Open()
+		}
+		m.showHelp = m.helpOverlay.IsActive()
 		m.helpScroll = 0
 	case ActionFocusNext:
 		m.panes.CycleForward()
@@ -784,21 +791,9 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.commandBar.Active() {
 		return m, m.commandBar.Update(msg)
 	}
-	if m.showHelp {
-		switch msg.String() {
-		case "j", "down":
-			m.helpScroll++
-		case "k", "up":
-			if m.helpScroll > 0 {
-				m.helpScroll--
-			}
-		case "g":
-			m.helpScroll = 0
-		case "G":
-			m.helpScroll = 9999
-		default:
-			m.showHelp = false
-		}
+	if m.helpOverlay.IsActive() {
+		m.helpOverlay.Update(msg)
+		m.showHelp = m.helpOverlay.IsActive()
 		return m, nil
 	}
 	if m.editDialog.IsActive() {
@@ -909,8 +904,8 @@ func (m Model) View() string {
 		return m.connSelector.View(m.width, m.height)
 	}
 
-	if m.showHelp {
-		return m.helpView()
+	if m.helpOverlay.IsActive() {
+		return m.helpOverlay.View(m.panes.ActiveID(), m.mode, m.width, m.height)
 	}
 
 	if m.editDialog.IsActive() {
@@ -937,50 +932,14 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, content, bottom)
 }
 
-func (m *Model) helpView() string {
-	help := HelpText(m.panes.ActiveID())
-	lines := strings.Split(help, "\n")
-
-	// border(2) + padding(2) + some margin
-	maxLines := m.height - 6
-	if maxLines < 5 {
-		maxLines = 5
+// OpenHelp opens the help overlay. Exported for command handler use.
+func (m *Model) OpenHelp(topic string) {
+	if topic == "" {
+		m.helpOverlay.Open()
+	} else {
+		m.helpOverlay.OpenTopic(topic)
 	}
-
-	// clamp scroll
-	totalLines := len(lines)
-	maxScroll := totalLines - maxLines
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if m.helpScroll > maxScroll {
-		m.helpScroll = maxScroll
-	}
-
-	// apply scroll window
-	start := m.helpScroll
-	end := start + maxLines
-	if end > totalLines {
-		end = totalLines
-	}
-	visible := lines[start:end]
-
-	// scroll hint
-	if totalLines > maxLines {
-		visible = append(visible, "")
-		visible = append(visible, lipgloss.NewStyle().Foreground(lipgloss.Color("240")).
-			Render("(j/k to scroll, ? to dismiss)"))
-	}
-
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Current().Styles.BorderFocused).
-		Padding(1, 2).
-		Width(54)
-
-	overlay := style.Render(strings.Join(visible, "\n"))
-
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay)
+	m.showHelp = true
 }
 
 type paneAdapter struct {

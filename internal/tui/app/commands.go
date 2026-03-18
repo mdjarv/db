@@ -37,6 +37,8 @@ var commandRegistry = map[string]cmdHandler{
 	"buffers":  cmdListBuffers,
 	"theme":    cmdTheme,
 	"connect":  cmdConnect,
+	"help":     cmdHelp,
+	"h":        cmdHelp,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -172,6 +174,11 @@ func cmdConnect(m *Model, _ string) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 	return *m, m.discoverConnections()
+}
+
+func cmdHelp(m *Model, args string) (tea.Model, tea.Cmd) {
+	m.OpenHelp(strings.TrimSpace(args))
+	return *m, nil
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {
