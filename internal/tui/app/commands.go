@@ -38,6 +38,8 @@ var commandRegistry = map[string]cmdHandler{
 	"theme":    cmdTheme,
 	"connect":  cmdConnect,
 	"refresh":  cmdRefresh,
+	"help":     cmdHelp,
+	"h":        cmdHelp,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -181,6 +183,11 @@ func cmdRefresh(m *Model, _ string) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 	return *m, func() tea.Msg { return core.RefreshSchemaMsg{} }
+}
+
+func cmdHelp(m *Model, args string) (tea.Model, tea.Cmd) {
+	m.OpenHelp(strings.TrimSpace(args))
+	return *m, nil
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {
