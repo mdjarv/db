@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -68,6 +69,8 @@ type Model struct {
 	editPKCols []string            // PK column names for current result
 	editPKIdx  []int               // PK column indices in result set
 	editCols   []schema.ColumnInfo // column info for current result
+
+	queryTimeout time.Duration // 0 = no timeout
 
 	width      int
 	height     int
@@ -505,10 +508,19 @@ func copyToClipboard(content string) tea.Cmd {
 
 func (m Model) executeQuery(sql string) tea.Cmd {
 	conn := m.conn
+	timeout := m.queryTimeout
 	return func() tea.Msg {
 		ctx := context.Background()
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 		result, err := conn.Query(ctx, sql)
 		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return core.QueryErrorMsg{Err: fmt.Errorf("query timed out after %s", timeout)}
+			}
 			return core.QueryErrorMsg{Err: err}
 		}
 		defer result.Rows.Close()
