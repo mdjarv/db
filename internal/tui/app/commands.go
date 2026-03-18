@@ -37,6 +37,7 @@ var commandRegistry = map[string]cmdHandler{
 	"buffers":  cmdListBuffers,
 	"theme":    cmdTheme,
 	"connect":  cmdConnect,
+	"refresh":  cmdRefresh,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -172,6 +173,14 @@ func cmdConnect(m *Model, _ string) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 	return *m, m.discoverConnections()
+}
+
+func cmdRefresh(m *Model, _ string) (tea.Model, tea.Cmd) {
+	if m.inspector == nil {
+		m.statusBar.SetMessage("not connected")
+		return *m, nil
+	}
+	return *m, func() tea.Msg { return core.RefreshSchemaMsg{} }
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {
