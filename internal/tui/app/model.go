@@ -18,6 +18,7 @@ import (
 	"github.com/mdjarv/db/internal/editor"
 	"github.com/mdjarv/db/internal/export"
 	"github.com/mdjarv/db/internal/schema"
+	"github.com/mdjarv/db/internal/tui/components/bufferlist"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/components/connform"
 	"github.com/mdjarv/db/internal/tui/components/connselector"
@@ -55,6 +56,13 @@ type Model struct {
 	connForm     *connform.Model
 	dumpForm     *dumpform.Model
 	dumpProgress *dialog.ProgressModel
+	bufferList   *bufferlist.Model
+
+
+
+
+
+
 	buffers      *BufferManager
 	conn         db.Conn
 	inspector    schema.Inspector
@@ -127,6 +135,7 @@ func New() Model {
 		connForm:     connform.New(),
 		dumpForm:     dumpform.New(),
 		dumpProgress: dialog.NewProgress(),
+		bufferList:   bufferlist.New(),
 		helpOverlay:  helpoverlay.New(),
 		buffers:      bm,
 		changeBuf:    editor.NewChangeBuffer(),
@@ -274,6 +283,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		buf.Duration = msg.Duration
 		buf.HasData = true
 		buf.ErrMsg = ""
+		buf.LastExecutedQuery = m.queryEditor.Content()
+		buf.Modified = false
+		m.statusBar.SetBufferModified(false)
 		// set up editing context from query
 		sql := m.queryEditor.Content()
 		tableName, schemaName := parseTableFromSQL(sql)
@@ -1031,6 +1043,10 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showHelp = m.helpOverlay.IsActive()
 		return m, nil
 	}
+	if m.bufferList.IsActive() {
+		m.bufferList.Update(msg)
+		return m, nil
+	}
 	if m.editDialog.IsActive() {
 		return m, m.editDialog.Update(msg)
 	}
@@ -1121,6 +1137,11 @@ func (m *Model) recalcLayout() {
 	m.resultView.SetSize(rightW, bottomH)
 	m.statusBar.SetWidth(m.width)
 	m.commandBar.SetWidth(m.width)
+
+	// update modified indicator based on current editor content vs last executed
+	buf := m.buffers.Active()
+	buf.Modified = m.queryEditor.Content() != buf.LastExecutedQuery
+	m.statusBar.SetBufferModified(buf.Modified)
 }
 
 // View renders the full TUI.
@@ -1147,6 +1168,10 @@ func (m Model) View() string {
 
 	if m.helpOverlay.IsActive() {
 		return m.helpOverlay.View(m.panes.ActiveID(), m.mode, m.width, m.height)
+	}
+
+	if m.bufferList.IsActive() {
+		return m.bufferList.View(m.width, m.height)
 	}
 
 	if m.editDialog.IsActive() {
@@ -1254,7 +1279,7 @@ func (a *paneAdapter) SetSize(w, h int) {
 func (m *Model) saveBufferState() {
 	buf := m.buffers.Active()
 	buf.Query = m.queryEditor.Content()
-	buf.Modified = buf.Query != ""
+	buf.Modified = buf.Query != buf.LastExecutedQuery
 
 	cols, rows := m.resultView.ResultData()
 	buf.Columns = cols
@@ -1282,6 +1307,7 @@ func (m *Model) restoreBufferState() {
 	}
 
 	m.statusBar.SetBuffer(m.buffers.ActiveIndex(), m.buffers.Count())
+	m.statusBar.SetBufferModified(buf.Modified)
 	m.recalcLayout()
 }
 

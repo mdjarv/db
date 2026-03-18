@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mdjarv/db/internal/tui/components/bufferlist"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/core"
 	"github.com/mdjarv/db/internal/tui/theme"
@@ -165,7 +166,16 @@ func cmdSwitchBuffer(m *Model, args string) (tea.Model, tea.Cmd) {
 
 func cmdListBuffers(m *Model, _ string) (tea.Model, tea.Cmd) {
 	m.saveBufferState()
-	m.statusBar.SetMessage(m.buffers.List())
+	var infos []bufferlist.BufferInfo
+	for i, b := range m.buffers.Buffers() {
+		infos = append(infos, bufferlist.BufferInfo{
+			Index:    i + 1,
+			Query:    b.Query,
+			Active:   i+1 == m.buffers.ActiveIndex(),
+			Modified: b.Modified,
+		})
+	}
+	m.bufferList.Open(infos)
 	return *m, nil
 }
 
