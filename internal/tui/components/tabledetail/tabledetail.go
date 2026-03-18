@@ -246,7 +246,7 @@ func (m *Model) renderColumns(t *theme.Theme) []string {
 
 		// type with color
 		typeStr := fmt.Sprintf("%-*s", maxTypeW, c.TypeName)
-		typeStr = TypeStyle(t, c.TypeName).Render(typeStr)
+		typeStr = theme.TypeStyle(t, c.TypeName).Render(typeStr)
 
 		// nullability
 		nullStr := ""
@@ -274,92 +274,6 @@ func (m *Model) renderColumns(t *theme.Theme) []string {
 		lines = append(lines, strings.Join(parts, "  "))
 	}
 	return lines
-}
-
-// TypeCategory classifies a PostgreSQL type for coloring.
-type TypeCategory int
-
-// Type categories for PostgreSQL types.
-const (
-	TypeCategoryOther TypeCategory = iota
-	TypeCategoryNumeric
-	TypeCategoryString
-	TypeCategoryBoolean
-	TypeCategoryDateTime
-	TypeCategoryJSON
-	TypeCategoryArray
-)
-
-// CategorizeType returns the category for a PostgreSQL type name.
-func CategorizeType(typeName string) TypeCategory {
-	lower := strings.ToLower(typeName)
-
-	if strings.HasSuffix(lower, "[]") {
-		return TypeCategoryArray
-	}
-
-	// strip size specifiers for matching: varchar(100) -> varchar
-	base := lower
-	if idx := strings.IndexByte(base, '('); idx != -1 {
-		base = base[:idx]
-	}
-
-	switch base {
-	case "serial", "bigserial", "smallserial",
-		"integer", "int", "int2", "int4", "int8",
-		"bigint", "smallint",
-		"numeric", "decimal",
-		"real", "float4",
-		"double precision", "float8",
-		"money", "oid":
-		return TypeCategoryNumeric
-
-	case "varchar", "character varying",
-		"char", "character",
-		"text", "name", "uuid",
-		"citext", "bpchar":
-		return TypeCategoryString
-
-	case "boolean", "bool":
-		return TypeCategoryBoolean
-
-	case "timestamp", "timestamptz",
-		"timestamp without time zone",
-		"timestamp with time zone",
-		"date", "time", "timetz",
-		"time without time zone",
-		"time with time zone",
-		"interval":
-		return TypeCategoryDateTime
-
-	case "json", "jsonb":
-		return TypeCategoryJSON
-	}
-
-	return TypeCategoryOther
-}
-
-// TypeStyle returns the lipgloss style for a type name.
-func TypeStyle(t *theme.Theme, typeName string) lipgloss.Style {
-	cat := CategorizeType(typeName)
-	switch cat {
-	case TypeCategoryNumeric:
-		return t.Styles.DataNumber
-	case TypeCategoryString:
-		return t.Styles.DataString
-	case TypeCategoryBoolean:
-		return t.Styles.DataBoolTrue
-	case TypeCategoryDateTime:
-		return t.Styles.DataDate
-	case TypeCategoryJSON:
-		return t.Styles.Keyword
-	case TypeCategoryArray:
-		// base type color but dimmed
-		base := strings.TrimSuffix(typeName, "[]")
-		return TypeStyle(t, base).Faint(true)
-	default:
-		return lipgloss.NewStyle()
-	}
 }
 
 func filterConstraints(constraints []schema.Constraint) []schema.Constraint {

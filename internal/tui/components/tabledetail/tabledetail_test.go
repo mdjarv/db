@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mdjarv/db/internal/schema"
+	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 func sampleTable() schema.Table {
@@ -126,48 +127,48 @@ func TestDismissKeys(t *testing.T) {
 func TestCategorizeType(t *testing.T) {
 	tests := []struct {
 		typeName string
-		want     TypeCategory
+		want     theme.TypeCategory
 	}{
-		{"serial", TypeCategoryNumeric},
-		{"integer", TypeCategoryNumeric},
-		{"bigint", TypeCategoryNumeric},
-		{"numeric", TypeCategoryNumeric},
-		{"real", TypeCategoryNumeric},
-		{"double precision", TypeCategoryNumeric},
-		{"smallint", TypeCategoryNumeric},
-		{"money", TypeCategoryNumeric},
+		{"serial", theme.TypeNumeric},
+		{"integer", theme.TypeNumeric},
+		{"bigint", theme.TypeNumeric},
+		{"numeric", theme.TypeNumeric},
+		{"real", theme.TypeNumeric},
+		{"double precision", theme.TypeNumeric},
+		{"smallint", theme.TypeNumeric},
+		{"money", theme.TypeNumeric},
 
-		{"varchar", TypeCategoryString},
-		{"varchar(100)", TypeCategoryString},
-		{"character varying", TypeCategoryString},
-		{"text", TypeCategoryString},
-		{"name", TypeCategoryString},
-		{"uuid", TypeCategoryString},
-		{"char", TypeCategoryString},
-		{"citext", TypeCategoryString},
+		{"varchar", theme.TypeString},
+		{"varchar(100)", theme.TypeString},
+		{"character varying", theme.TypeString},
+		{"text", theme.TypeString},
+		{"name", theme.TypeString},
+		{"uuid", theme.TypeString},
+		{"char", theme.TypeString},
+		{"citext", theme.TypeString},
 
-		{"boolean", TypeCategoryBoolean},
-		{"bool", TypeCategoryBoolean},
+		{"boolean", theme.TypeBoolean},
+		{"bool", theme.TypeBoolean},
 
-		{"timestamp", TypeCategoryDateTime},
-		{"timestamptz", TypeCategoryDateTime},
-		{"date", TypeCategoryDateTime},
-		{"time", TypeCategoryDateTime},
-		{"interval", TypeCategoryDateTime},
+		{"timestamp", theme.TypeDateTime},
+		{"timestamptz", theme.TypeDateTime},
+		{"date", theme.TypeDateTime},
+		{"time", theme.TypeDateTime},
+		{"interval", theme.TypeDateTime},
 
-		{"json", TypeCategoryJSON},
-		{"jsonb", TypeCategoryJSON},
+		{"json", theme.TypeJSON},
+		{"jsonb", theme.TypeJSON},
 
-		{"integer[]", TypeCategoryArray},
-		{"text[]", TypeCategoryArray},
-		{"jsonb[]", TypeCategoryArray},
+		{"integer[]", theme.TypeArray},
+		{"text[]", theme.TypeArray},
+		{"jsonb[]", theme.TypeArray},
 
-		{"hstore", TypeCategoryOther},
-		{"geometry", TypeCategoryOther},
+		{"hstore", theme.TypeOther},
+		{"geometry", theme.TypeOther},
 	}
 
 	for _, tt := range tests {
-		got := CategorizeType(tt.typeName)
+		got := theme.CategorizeType(tt.typeName)
 		if got != tt.want {
 			t.Errorf("CategorizeType(%q) = %d, want %d", tt.typeName, got, tt.want)
 		}

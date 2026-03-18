@@ -61,14 +61,9 @@ type Model struct {
 	dumpProgress *dialog.ProgressModel
 	bufferList   *bufferlist.Model
 
-
-
-
-
-
-	buffers      *BufferManager
-	conn         db.Conn
-	inspector    schema.Inspector
+	buffers   *BufferManager
+	conn      db.Conn
+	inspector schema.Inspector
 
 	// connection management
 	stores                 []*conn.Store
