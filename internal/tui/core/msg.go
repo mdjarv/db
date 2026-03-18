@@ -5,6 +5,7 @@ import (
 
 	"github.com/mdjarv/db/internal/conn"
 	"github.com/mdjarv/db/internal/db"
+	"github.com/mdjarv/db/internal/dump"
 	"github.com/mdjarv/db/internal/schema"
 )
 
@@ -159,15 +160,36 @@ type ContextMenuActionMsg struct {
 	ActionID string
 }
 
-// DumpTableMsg requests a table data dump (not yet implemented).
+// DumpTableMsg requests a table data dump.
 type DumpTableMsg struct {
 	Table string
 }
 
-// DumpSchemaMsg requests a schema-only dump (not yet implemented).
+// DumpSchemaMsg requests a schema-only dump.
 type DumpSchemaMsg struct {
 	Table string
 }
+
+// DumpStartMsg carries a dump configuration to begin execution.
+type DumpStartMsg struct {
+	Config dump.Config
+}
+
+// DumpProgressMsg carries a progress update from a running dump.
+type DumpProgressMsg struct {
+	Event dump.ProgressEvent
+}
+
+// DumpCompleteMsg signals a dump has finished.
+type DumpCompleteMsg struct {
+	Path     string
+	Size     int64
+	Duration time.Duration
+	Err      error
+}
+
+// DumpCancelMsg signals the user cancelled an in-progress dump.
+type DumpCancelMsg struct{}
 
 // ClearErrorMsg signals that a timed error message should be cleared.
 type ClearErrorMsg struct {

@@ -41,6 +41,7 @@ var commandRegistry = map[string]cmdHandler{
 	"refresh":  cmdRefresh,
 	"help":     cmdHelp,
 	"h":        cmdHelp,
+	"dump":     cmdDump,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -198,6 +199,11 @@ func cmdRefresh(m *Model, _ string) (tea.Model, tea.Cmd) {
 func cmdHelp(m *Model, args string) (tea.Model, tea.Cmd) {
 	m.OpenHelp(strings.TrimSpace(args))
 	return *m, nil
+}
+
+func cmdDump(m *Model, args string) (tea.Model, tea.Cmd) {
+	tableName := strings.TrimSpace(args)
+	return m.openDumpForm(tableName, false)
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {
