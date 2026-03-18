@@ -60,7 +60,7 @@ func runDump(cmd *cobra.Command, _ []string) error {
 
 	dcfg := dump.Config{
 		Host:       cfg.Host,
-		Port:       cfg.Port,
+		Port:       fmt.Sprintf("%d", cfg.Port),
 		User:       cfg.User,
 		Password:   cfg.Password,
 		DBName:     cfg.DBName,
@@ -79,7 +79,10 @@ func runDump(cmd *cobra.Command, _ []string) error {
 	}
 
 	runner := dump.NewRunner(binary)
-	ch := runner.Run(ctx, dcfg, 0)
+	ch, err := runner.Run(ctx, dcfg, 0)
+	if err != nil {
+		return wrapIO("start pg_dump", err)
+	}
 
 	tableCount := 0
 	for ev := range ch {

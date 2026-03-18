@@ -3,6 +3,7 @@ package dump
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -61,6 +62,22 @@ func (f Format) ext() string {
 		return "" // directory name, no extension
 	default:
 		return ".dump"
+	}
+}
+
+// ParseFormat converts a string to a Format value.
+func ParseFormat(s string) (Format, error) {
+	switch strings.ToLower(s) {
+	case "plain", "p":
+		return Plain, nil
+	case "custom", "c":
+		return Custom, nil
+	case "directory", "d":
+		return Directory, nil
+	case "tar", "t":
+		return Tar, nil
+	default:
+		return Plain, fmt.Errorf("unknown format %q (valid: plain, custom, directory, tar)", s)
 	}
 }
 
