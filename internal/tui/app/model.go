@@ -231,6 +231,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case core.RefreshSchemaMsg:
 		if m.inspector != nil {
+			if ci, ok := m.inspector.(*schema.CachedInspector); ok {
+				ci.Invalidate()
+			}
 			m.statusBar.SetMessage("refreshing schema...")
 			return m, m.loadSchema()
 		}
@@ -644,7 +647,7 @@ func (m Model) connectTo(candidate conn.Candidate) tea.Cmd {
 			return core.ConnectErrorMsg{Err: err}
 		}
 		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
-		insp := schema.NewPostgresInspector(c)
+		insp := schema.NewCachedInspector(schema.NewPostgresInspector(c))
 		return core.ConnectedMsg{Conn: c, Inspector: insp, ConnInfo: connInfo, Candidate: candidate}
 	}
 }
