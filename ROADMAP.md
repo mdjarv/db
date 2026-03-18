@@ -106,72 +106,65 @@ See [docs/architecture.md](docs/architecture.md) for detailed design.
 
 Work is organized into phases. Within each phase, milestones can be worked on **in parallel** by different developers.
 
-### Phase 1: Foundation
+### Phase 1: Foundation (complete)
 
-| Milestone | Doc | Parallel? | Description |
+| Milestone | Status | Doc | Description |
 |---|---|---|---|
-| M0 | [Project Skeleton](docs/m0-skeleton.md) | -- | Module init, directory structure, CI, linting |
-| M1 | [Database Layer](docs/m1-database-layer.md) | Yes | Driver interface + PostgreSQL implementation |
-| M2 | [TUI Shell](docs/m2-tui-shell.md) | Yes (with M1) | App shell, pane layout, vim mode system (mock data) |
+| M0 | done | [Project Skeleton](docs/m0-skeleton.md) | Module init, directory structure, CI, linting |
+| M1 | done | [Database Layer](docs/m1-database-layer.md) | Driver interface + PostgreSQL implementation |
+| M2 | done | [TUI Shell](docs/m2-tui-shell.md) | App shell, pane layout, vim mode system |
 
-### Phase 2: Core Features
+### Phase 2: Core Features (complete)
 
-Requires M1 complete. M2 can still be in progress.
-
-| Milestone | Doc | Parallel? | Description |
+| Milestone | Status | Doc | Description |
 |---|---|---|---|
-| M3 | [Connection Management](docs/m3-connections.md) | Yes | Config file, keyring, CLI `connect`/`ping` |
-| M4 | [Query Engine](docs/m4-query-engine.md) | Yes | Execute queries, transactions, CLI `query` |
-| M5 | [Schema Inspection](docs/m5-schema.md) | Yes | Introspect tables/columns/indexes/FKs, CLI `tables`/`describe` |
-| M6 | [Export](docs/m6-export.md) | Yes | CSV/JSON/SQL export, `--format` flag on `query` |
+| M3 | done | [Connection Management](docs/m3-connections.md) | Config file, keyring, CLI `connect`/`ping` |
+| M4 | done | [Query Engine](docs/m4-query-engine.md) | Execute queries, transactions, CLI `query` |
+| M5 | done | [Schema Inspection](docs/m5-schema.md) | Introspect tables/columns/indexes/FKs, CLI `tables`/`describe` |
+| M6 | done | [Export](docs/m6-export.md) | CSV/JSON/SQL export, `--format` flag on `query` |
 
-### Phase 3: TUI Integration
+### Phase 3: TUI Integration (complete)
 
-Requires M2 + relevant Phase 2 milestones.
-
-| Milestone | Doc | Parallel? | Description |
+| Milestone | Status | Doc | Description |
 |---|---|---|---|
-| M7 | [Table Browser](docs/m7-table-browser.md) | Yes | Left pane: table list, schema display |
-| M8 | [Query Editor](docs/m8-query-editor.md) | Yes | Right-top: SQL editor, syntax highlighting, autocomplete |
-| M9 | [Result Viewer](docs/m9-result-viewer.md) | Yes | Right-bottom: result table, virtual scrolling |
+| M7 | done | [Table Browser](docs/m7-table-browser.md) | Left pane: table list, schema display |
+| M8 | done | [Query Editor](docs/m8-query-editor.md) | Right-top: SQL editor, syntax highlighting |
+| M9 | done | [Result Viewer](docs/m9-result-viewer.md) | Right-bottom: result table, virtual scrolling |
 
-### Phase 4: Advanced Features
+### Phase 4: Advanced Features (complete)
 
-Requires Phase 3 core panes working.
-
-| Milestone | Doc | Parallel? | Description |
+| Milestone | Status | Doc | Description |
 |---|---|---|---|
-| M10 | [Data Editing](docs/m10-data-editing.md) | Yes | Inline edit, change buffer, commit/rollback |
-| M11 | [Theming](docs/m11-theming.md) | Yes | Theme engine, built-in themes |
-| M12 | [Multi-Query Buffers](docs/m12-multi-query.md) | Yes | Multiple query/result pairs, buffer switching |
+| M10 | done | [Data Editing](docs/m10-data-editing.md) | Inline edit, change buffer, commit/rollback |
+| M11 | done | [Theming](docs/m11-theming.md) | Theme engine, built-in themes |
+| M12 | mostly done | [Multi-Query Buffers](docs/m12-multi-query.md) | Multiple query/result pairs, buffer switching |
 
-### Phase 5: Polish
+### Phase 5: Polish (in progress)
 
-| Milestone | Doc | Description |
-|---|---|---|
-| M13 | [Integration & Polish](docs/m13-polish.md) | Integration tests, error handling, help system, keybinding cheatsheet |
+| Milestone | Status | Doc | Description |
+|---|---|---|---|
+| M13 | in progress | [Integration & Polish](docs/m13-polish.md) | Integration tests, error handling, help system, keybinding cheatsheet |
 
-## Parallelism Map
+## Remaining Work
 
-```
-Phase 1:    M0 ──> M1 ─────────────────────────────────────>
-                   M2 (TUI shell, mock data) ──────────────>
+### M12 (minor)
+- Buffer list overlay popup (`:ls`)
+- Modified indicator `[+]` for unsaved buffers
 
-Phase 2:          M3 (connections) ───>
-                  M4 (query engine) ──>
-                  M5 (schema) ────────>
-                  M6 (export) ────────>
+### M13 (polish)
+- TUI-level integration tests via `teatest`
+- Full flow TUI tests (connect -> browse -> query -> export)
+- Permission denied error display
+- TUI rendering profiling (<16ms)
+- Connection pool tuning
+- Lazy schema loading
+- README with screenshots, install instructions
+- CHANGELOG.md
 
-Phase 3:                M7 (table browser) ──>
-                        M8 (query editor) ───>
-                        M9 (result viewer) ──>
-
-Phase 4:                      M10 (data editing) ──>
-                              M11 (theming) ────────>
-                              M12 (multi-query) ────>
-
-Phase 5:                            M13 (polish) ──────>
-```
+### Not planned
+- SQL autocomplete (M4/M8) — deferred
+- Schema listing (`Schemas()`) — deferred
+- Homebrew/AUR packages — future
 
 ## Key Decisions
 

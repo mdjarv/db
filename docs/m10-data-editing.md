@@ -95,8 +95,8 @@ Popup dialog with:
 - [x] Unit: DML generation for INSERT/UPDATE/DELETE
 - [x] Unit: NULL handling in DML
 - [x] Unit: parameterized query correctness
-- [ ] Integration: apply changes to real PostgreSQL (testcontainers)
-- [ ] Integration: transaction commit/rollback
+- [x] Integration: apply changes to real PostgreSQL (testcontainers)
+- [x] Integration: transaction commit/rollback
 
 ## Acceptance Criteria
 

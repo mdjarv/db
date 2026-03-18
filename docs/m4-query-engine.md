@@ -36,7 +36,7 @@ Query execution engine with transaction management. CLI `db query` command for o
 - [x] File support: `db query -f queries/report.sql`
 - [x] Connection flags inherited from root command
 - [x] Pretty table output by default (aligned columns, borders)
-- [ ] Exit code: 0 success, 1 query error, 2 connection error
+- [x] Exit code: 0 success, 1 query error, 2 connection error
 
 ### Tests
 
@@ -46,7 +46,7 @@ Query execution engine with transaction management. CLI `db query` command for o
 - [ ] Unit: autocomplete keyword matching
 - [ ] Unit: autocomplete table/column matching
 - [x] Unit: SQL type detection (SELECT vs DML)
-- [ ] Integration: CLI `db query` end-to-end with testcontainers
+- [x] Integration: CLI `db query` end-to-end with testcontainers
 
 ## Design Notes
 

@@ -44,7 +44,7 @@ Introspect PostgreSQL schema: tables, columns, indexes, constraints, foreign key
 - [x] Integration: verify Columns() returns correct types, nullability, defaults
 - [x] Integration: verify Indexes() includes all index types
 - [x] Integration: verify ForeignKeys() resolves references correctly
-- [ ] Integration: CLI `db tables` and `db describe` end-to-end
+- [x] Integration: CLI `db tables` and `db describe` end-to-end
 
 ## Test Schema
 

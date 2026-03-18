@@ -13,6 +13,9 @@ A vim-modal TUI database client for PostgreSQL. Fast schema browsing, querying, 
 - **Theming** — built-in themes (default-dark, nord, dracula, etc.)
 - **Connection management** — saved connections with OS keyring credential storage
 - **Export** — CSV, JSON, SQL output formats
+- **Help system** — `?` overlay with context-sensitive keybindings, `:help <topic>`
+- **Schema cache** — cached introspection with `:refresh` to invalidate
+- **Error handling** — auto-dismiss errors, structured CLI exit codes, connection loss recovery
 
 ## Install
 
@@ -38,6 +41,7 @@ db introspect <table>           # show type details (OIDs, enum values, composit
 db query "SELECT ..."           # one-shot query
 db query -f file.sql            # execute SQL file
 db query --format csv "..."     # output as csv, json, sql, or table
+db query --timeout 30 "..."     # query with 30s timeout
 db connect add                  # save a connection
 db connect list                 # list saved connections
 db connect default <name>       # set default connection
@@ -73,7 +77,11 @@ db connect default <name>       # set default connection
 | `y` | Normal/Visual | Yank cell/selection |
 | `:commit` | Command | Apply pending edits |
 | `:rollback` | Command | Discard pending edits |
+| `?` | Normal | Help overlay (context-sensitive) |
 | `+`/`-` | Normal | Resize left pane |
+| `:help [topic]` | Command | Detailed help (topics: navigation, modes, tables, editor, results, commands, export, editing, connections) |
+| `:refresh` | Command | Invalidate schema cache and reload |
+| `:set querytimeout N` | Command | Set query timeout in seconds (0 = no timeout) |
 
 ### Edit Dialog
 
