@@ -1,0 +1,28 @@
+version: 2
+
+project_name: db
+
+builds:
+  - main: .
+    binary: db
+    ldflags:
+      - -s -w -X github.com/mdjarv/db/cmd.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format_overrides:
+      - goos: darwin
+        format: zip
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
