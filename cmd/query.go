@@ -37,7 +37,7 @@ func init() {
 func runQuery(cmd *cobra.Command, args []string) error {
 	sql, err := resolveSQL(args)
 	if err != nil {
-		return err
+		return wrapIO("resolve SQL", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -45,19 +45,19 @@ func runQuery(cmd *cobra.Command, args []string) error {
 
 	conn, err := connectFromFlags(cmd)
 	if err != nil {
-		return fmt.Errorf("connect: %w", err)
+		return err // already wrapped by connectFromFlags
 	}
 	defer func() { _ = conn.Close(ctx) }()
 
 	e := query.NewExecutor(conn, query.AutoCommit)
 	res, err := e.Execute(ctx, sql)
 	if err != nil {
-		return fmt.Errorf("execute: %w", err)
+		return wrapQuery("execute", err)
 	}
 
 	if res.IsQuery {
 		if err := printResult(res.Result, queryFormat, queryNoHeader); err != nil {
-			return err
+			return wrapIO("print result", err)
 		}
 		fmt.Fprintf(os.Stderr, "(%s)\n", res.Duration.Truncate(time.Millisecond))
 	} else {

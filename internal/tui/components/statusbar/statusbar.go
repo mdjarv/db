@@ -3,12 +3,17 @@ package statusbar
 
 import (
 	"fmt"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/mdjarv/db/internal/tui/core"
 	"github.com/mdjarv/db/internal/tui/theme"
 )
+
+// DefaultErrorTimeout is the default auto-dismiss duration for error messages.
+const DefaultErrorTimeout = 5 * time.Second
 
 // MsgLevel controls message priority. Higher-level messages are not
 // overwritten by lower-level ones.
@@ -23,22 +28,28 @@ const (
 
 // Model is the status bar state.
 type Model struct {
-	mode     core.Mode
-	connStr  string
-	message  string
-	msgLevel MsgLevel
-	txMode   string
-	bufIdx   int
-	bufCnt   int
-	width    int
+	mode         core.Mode
+	connStr      string
+	message      string
+	msgLevel     MsgLevel
+	txMode       string
+	bufIdx       int
+	bufCnt       int
+	width        int
+	errorID      int
+	errorTimeout time.Duration
 }
 
 // New creates a status bar.
 func New() *Model {
 	return &Model{
-		txMode: "txn",
+		txMode:       "txn",
+		errorTimeout: DefaultErrorTimeout,
 	}
 }
+
+// SetErrorTimeout sets the auto-dismiss duration for error messages.
+func (m *Model) SetErrorTimeout(d time.Duration) { m.errorTimeout = d }
 
 // SetMode updates the displayed vim mode.
 func (m *Model) SetMode(mode core.Mode) { m.mode = mode }
@@ -52,10 +63,28 @@ func (m *Model) SetMessage(msg string) {
 	}
 }
 
-// SetError sets a sticky error message that persists until explicitly cleared.
-func (m *Model) SetError(msg string) {
+// SetError sets an error message that auto-dismisses after the configured
+// timeout. Returns a tea.Cmd that schedules the dismiss.
+func (m *Model) SetError(msg string) tea.Cmd {
+	m.errorID++
 	m.message = msg
 	m.msgLevel = MsgError
+	id := m.errorID
+	timeout := m.errorTimeout
+	return tea.Tick(timeout, func(_ time.Time) tea.Msg {
+		return core.ClearErrorMsg{ID: id}
+	})
+}
+
+// HandleClearError processes a ClearErrorMsg; returns true if the error was
+// cleared (i.e. the ID matched the current error).
+func (m *Model) HandleClearError(msg core.ClearErrorMsg) bool {
+	if msg.ID == m.errorID && m.msgLevel >= MsgError {
+		m.message = ""
+		m.msgLevel = MsgInfo
+		return true
+	}
+	return false
 }
 
 // SetSuccess sets a success message, clearing any error.

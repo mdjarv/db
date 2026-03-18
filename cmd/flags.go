@@ -66,7 +66,11 @@ func connectionStores() []*conn.Store {
 func connectFromFlags(cmd *cobra.Command) (db.Conn, error) {
 	cfg, err := resolveConnection(cmd)
 	if err != nil {
-		return nil, err
+		return nil, classifyConnError(err)
 	}
-	return db.Open(cmd.Context(), "postgres", cfg.DSN())
+	c, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
+	if err != nil {
+		return nil, classifyConnError(err)
+	}
+	return c, nil
 }

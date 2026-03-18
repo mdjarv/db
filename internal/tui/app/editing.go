@@ -361,8 +361,8 @@ type commitResultMsg struct {
 // handleCommitResult processes the result of applying changes.
 func (m *Model) handleCommitResult(msg commitResultMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
-		m.statusBar.SetError(fmt.Sprintf("commit failed (%d applied): %s", msg.applied, msg.err))
-		return *m, nil
+		errCmd := m.statusBar.SetError(fmt.Sprintf("commit failed (%d applied): %s", msg.applied, msg.err))
+		return *m, errCmd
 	}
 	m.changeBuf.Clear()
 	m.resultView.ClearModified()
@@ -568,8 +568,8 @@ func (m *Model) storeForSource(source conn.Source) *conn.Store {
 func (m *Model) handleConnFormSubmit(msg connform.SubmitMsg) (Model, tea.Cmd) {
 	store := m.storeForSource(msg.Source)
 	if store == nil {
-		m.statusBar.SetError("no store available")
-		return *m, nil
+		errCmd := m.statusBar.SetError("no store available")
+		return *m, errCmd
 	}
 
 	cfg := msg.Config
@@ -577,8 +577,8 @@ func (m *Model) handleConnFormSubmit(msg connform.SubmitMsg) (Model, tea.Cmd) {
 	// handle rename
 	if msg.IsEdit && msg.OldName != "" && msg.OldName != cfg.Name {
 		if err := store.Rename(msg.OldName, cfg.Name); err != nil {
-			m.statusBar.SetError("rename failed: " + err.Error())
-			return *m, nil
+			errCmd := m.statusBar.SetError("rename failed: " + err.Error())
+			return *m, errCmd
 		}
 		if m.creds != nil {
 			_ = m.creds.DeletePassword(msg.OldName)
@@ -586,8 +586,8 @@ func (m *Model) handleConnFormSubmit(msg connform.SubmitMsg) (Model, tea.Cmd) {
 	}
 
 	if err := store.Add(cfg); err != nil {
-		m.statusBar.SetError("save failed: " + err.Error())
-		return *m, nil
+		errCmd := m.statusBar.SetError("save failed: " + err.Error())
+		return *m, errCmd
 	}
 
 	if m.creds != nil {
@@ -612,14 +612,14 @@ func (m *Model) doDeleteConn() (Model, tea.Cmd) {
 
 	store := m.storeForSource(c.Source)
 	if store == nil {
-		m.statusBar.SetError("no store available")
-		return *m, nil
+		errCmd := m.statusBar.SetError("no store available")
+		return *m, errCmd
 	}
 
 	name := c.Config.Name
 	if err := store.Remove(name); err != nil {
-		m.statusBar.SetError("delete failed: " + err.Error())
-		return *m, nil
+		errCmd := m.statusBar.SetError("delete failed: " + err.Error())
+		return *m, errCmd
 	}
 	if m.creds != nil {
 		_ = m.creds.DeletePassword(name)
