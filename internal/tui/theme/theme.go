@@ -2,7 +2,6 @@
 package theme
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
@@ -238,83 +237,6 @@ type Styles struct {
 	Error   lipgloss.Style
 	Success lipgloss.Style
 	Warning lipgloss.Style
-}
-
-// TypeCategory classifies a PostgreSQL type for consistent coloring
-// across result viewer, table detail overlay, and other components.
-type TypeCategory int
-
-// Type categories.
-const (
-	TypeOther    TypeCategory = iota
-	TypeNumeric               // serial, integer, bigint, numeric, real, etc.
-	TypeString                // varchar, text, char, uuid, etc.
-	TypeBoolean               // boolean
-	TypeDateTime              // timestamp, date, time, interval
-	TypeJSON                  // json, jsonb
-	TypeArray                 // any type ending in []
-)
-
-// CategorizeType returns the category for a PostgreSQL type name.
-func CategorizeType(typeName string) TypeCategory {
-	lower := strings.ToLower(typeName)
-	if strings.HasSuffix(lower, "[]") {
-		return TypeArray
-	}
-	base := lower
-	if idx := strings.IndexByte(base, '('); idx != -1 {
-		base = base[:idx]
-	}
-	switch base {
-	case "serial", "bigserial", "smallserial",
-		"integer", "int", "int2", "int4", "int8",
-		"bigint", "smallint",
-		"numeric", "decimal",
-		"real", "float4",
-		"double precision", "float8",
-		"money", "oid":
-		return TypeNumeric
-	case "varchar", "character varying",
-		"char", "character",
-		"text", "name", "uuid",
-		"citext", "bpchar":
-		return TypeString
-	case "boolean", "bool":
-		return TypeBoolean
-	case "timestamp", "timestamptz",
-		"timestamp without time zone",
-		"timestamp with time zone",
-		"date", "time", "timetz",
-		"time without time zone",
-		"time with time zone",
-		"interval":
-		return TypeDateTime
-	case "json", "jsonb":
-		return TypeJSON
-	}
-	return TypeOther
-}
-
-// TypeStyle returns the lipgloss style for a PostgreSQL type name using the
-// given theme's data colors.
-func TypeStyle(t *Theme, typeName string) lipgloss.Style {
-	switch CategorizeType(typeName) {
-	case TypeNumeric:
-		return t.Styles.DataNumber
-	case TypeString:
-		return t.Styles.DataString
-	case TypeBoolean:
-		return t.Styles.DataBoolTrue
-	case TypeDateTime:
-		return t.Styles.DataDate
-	case TypeJSON:
-		return t.Styles.Keyword
-	case TypeArray:
-		base := strings.TrimSuffix(typeName, "[]")
-		return TypeStyle(t, base).Faint(true)
-	default:
-		return lipgloss.NewStyle()
-	}
 }
 
 // Names returns the names of all built-in themes.

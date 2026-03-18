@@ -51,10 +51,20 @@ func (m *Model) SetResult(columns []core.ResultColumn, rows [][]string, duration
 		if c.TypeName != "" {
 			title += " [" + c.TypeName + "]"
 		}
+		var renderer theme.TypeRenderer
+		if len(c.CompositeFields) > 0 {
+			fields := make([]theme.Field, len(c.CompositeFields))
+			for j, f := range c.CompositeFields {
+				fields[j] = theme.Field{Name: f.Name, TypeName: f.TypeName}
+			}
+			renderer = theme.ForComposite(fields)
+		} else {
+			renderer = theme.ForType(c.TypeName)
+		}
 		cols[i] = table.Column{
 			Title:    title,
 			Width:    autoWidth(c.Name, c.TypeName, rows, i),
-			TypeHint: typeHint(c.TypeName, c.CompositeFields),
+			Renderer: renderer,
 		}
 	}
 	m.columns = columns
@@ -387,31 +397,6 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fms", float64(d.Microseconds())/1000)
 	}
 	return fmt.Sprintf("%.2fs", d.Seconds())
-}
-
-func typeHint(typeName string, compositeFields []core.CompositeField) table.TypeHint {
-	if len(compositeFields) > 0 {
-		return table.HintComposite
-	}
-	lower := strings.ToLower(typeName)
-	if strings.HasSuffix(lower, "[]") {
-		return table.HintArray
-	}
-	switch lower {
-	case "boolean", "bool":
-		return table.HintBool
-	case "integer", "int2", "int4", "int8", "bigint", "smallint",
-		"numeric", "decimal", "float4", "float8", "real", "double precision",
-		"serial", "bigserial", "smallserial", "money", "oid":
-		return table.HintNumber
-	case "date", "time", "timetz", "timestamp", "timestamptz", "interval":
-		return table.HintDate
-	case "uuid":
-		return table.HintUUID
-	case "json", "jsonb":
-		return table.HintJSON
-	}
-	return table.HintNone
 }
 
 func autoWidth(name, typeName string, rows [][]string, colIdx int) int {

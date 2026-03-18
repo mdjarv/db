@@ -215,61 +215,53 @@ func (m *Model) buildLines(t *theme.Theme) []string {
 }
 
 func (m *Model) renderColumns(t *theme.Theme) []string {
-	// compute column widths for alignment
+	dimStyle := t.Styles.Dim
+	boldStyle := lipgloss.NewStyle().Bold(true)
+
+	// abbreviate types and compute column widths
+	types := make([]string, len(m.columns))
 	maxNameW := 0
 	maxTypeW := 0
-	for _, c := range m.columns {
-		if len(c.Name) > maxNameW {
-			maxNameW = len(c.Name)
+	for i, c := range m.columns {
+		types[i] = abbreviateType(c.TypeName)
+		nameW := len(c.Name)
+		if c.Nullable {
+			nameW++ // for "?"
 		}
-		if len(c.TypeName) > maxTypeW {
-			maxTypeW = len(c.TypeName)
+		if nameW > maxNameW {
+			maxNameW = nameW
+		}
+		if len(types[i]) > maxTypeW {
+			maxTypeW = len(types[i])
 		}
 	}
 
-	dimStyle := t.Styles.Dim
-	boldStyle := lipgloss.NewStyle().Bold(true)
 	var lines []string
-
-	for _, c := range m.columns {
-		// PK indicator
+	for i, c := range m.columns {
 		pk := " "
 		if c.IsPK {
 			pk = "*"
 		}
 
-		// name (bold if PK)
-		name := fmt.Sprintf("%-*s", maxNameW, c.Name)
+		var name string
+		if c.Nullable {
+			padded := c.Name + dimStyle.Render("?") + strings.Repeat(" ", maxNameW-len(c.Name)-1)
+			name = padded
+		} else {
+			name = fmt.Sprintf("%-*s", maxNameW, c.Name)
+		}
 		if c.IsPK {
-			name = boldStyle.Render(name)
+			name = boldStyle.Render(fmt.Sprintf("%-*s", maxNameW, c.Name))
 		}
 
-		// type with color
-		typeStr := fmt.Sprintf("%-*s", maxTypeW, c.TypeName)
-		typeStr = theme.TypeStyle(t, c.TypeName).Render(typeStr)
-
-		// nullability
-		nullStr := ""
-		if !c.Nullable {
-			nullStr = "NOT NULL"
-		}
-
-		// default
-		defStr := ""
-		if c.Default != "" {
-			def := c.Default
-			if len(def) > 24 {
-				def = def[:21] + "..."
-			}
-			defStr = dimStyle.Render("DEFAULT " + def)
+		typeStr := fmt.Sprintf("%-*s", maxTypeW, types[i])
+		if r := theme.ForType(c.TypeName); r != nil {
+			typeStr = r.RenderType(typeStr)
 		}
 
 		parts := []string{"  " + pk + " " + name, typeStr}
-		if nullStr != "" {
-			parts = append(parts, nullStr)
-		}
-		if defStr != "" {
-			parts = append(parts, defStr)
+		if c.Default != "" {
+			parts = append(parts, dimStyle.Render("= "+c.Default))
 		}
 		lines = append(lines, strings.Join(parts, "  "))
 	}
@@ -285,6 +277,27 @@ func filterConstraints(constraints []schema.Constraint) []schema.Constraint {
 		out = append(out, c)
 	}
 	return out
+}
+
+func abbreviateType(typeName string) string {
+	lower := strings.ToLower(typeName)
+	switch {
+	case lower == "timestamp with time zone":
+		return "timestamptz"
+	case lower == "timestamp without time zone":
+		return "timestamp"
+	case lower == "time with time zone":
+		return "timetz"
+	case lower == "time without time zone":
+		return "time"
+	case lower == "double precision":
+		return "float8"
+	case strings.HasPrefix(lower, "character varying"):
+		return "varchar" + typeName[len("character varying"):]
+	case lower == "character" || strings.HasPrefix(lower, "character("):
+		return "char" + typeName[len("character"):]
+	}
+	return typeName
 }
 
 func formatCount(n int64) string {

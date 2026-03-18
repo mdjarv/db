@@ -6,7 +6,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mdjarv/db/internal/schema"
-	"github.com/mdjarv/db/internal/tui/theme"
 )
 
 func sampleTable() schema.Table {
@@ -124,57 +123,6 @@ func TestDismissKeys(t *testing.T) {
 	}
 }
 
-func TestCategorizeType(t *testing.T) {
-	tests := []struct {
-		typeName string
-		want     theme.TypeCategory
-	}{
-		{"serial", theme.TypeNumeric},
-		{"integer", theme.TypeNumeric},
-		{"bigint", theme.TypeNumeric},
-		{"numeric", theme.TypeNumeric},
-		{"real", theme.TypeNumeric},
-		{"double precision", theme.TypeNumeric},
-		{"smallint", theme.TypeNumeric},
-		{"money", theme.TypeNumeric},
-
-		{"varchar", theme.TypeString},
-		{"varchar(100)", theme.TypeString},
-		{"character varying", theme.TypeString},
-		{"text", theme.TypeString},
-		{"name", theme.TypeString},
-		{"uuid", theme.TypeString},
-		{"char", theme.TypeString},
-		{"citext", theme.TypeString},
-
-		{"boolean", theme.TypeBoolean},
-		{"bool", theme.TypeBoolean},
-
-		{"timestamp", theme.TypeDateTime},
-		{"timestamptz", theme.TypeDateTime},
-		{"date", theme.TypeDateTime},
-		{"time", theme.TypeDateTime},
-		{"interval", theme.TypeDateTime},
-
-		{"json", theme.TypeJSON},
-		{"jsonb", theme.TypeJSON},
-
-		{"integer[]", theme.TypeArray},
-		{"text[]", theme.TypeArray},
-		{"jsonb[]", theme.TypeArray},
-
-		{"hstore", theme.TypeOther},
-		{"geometry", theme.TypeOther},
-	}
-
-	for _, tt := range tests {
-		got := theme.CategorizeType(tt.typeName)
-		if got != tt.want {
-			t.Errorf("CategorizeType(%q) = %d, want %d", tt.typeName, got, tt.want)
-		}
-	}
-}
-
 func TestViewNotActiveReturnsEmpty(t *testing.T) {
 	m := New()
 	if v := m.View(80, 40); v != "" {
@@ -208,6 +156,31 @@ func TestFilterConstraints(t *testing.T) {
 	}
 	if filtered[0].Name != "chk" || filtered[1].Name != "uq" {
 		t.Errorf("unexpected filtered constraints: %v", filtered)
+	}
+}
+
+func TestAbbreviateType(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"timestamp with time zone", "timestamptz"},
+		{"timestamp without time zone", "timestamp"},
+		{"time with time zone", "timetz"},
+		{"time without time zone", "time"},
+		{"double precision", "float8"},
+		{"character varying", "varchar"},
+		{"character varying(100)", "varchar(100)"},
+		{"character(1)", "char(1)"},
+		{"character", "char"},
+		{"uuid", "uuid"},
+		{"text", "text"},
+		{"jsonb", "jsonb"},
+	}
+	for _, tt := range tests {
+		got := abbreviateType(tt.in)
+		if got != tt.want {
+			t.Errorf("abbreviateType(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 
