@@ -1,7 +1,6 @@
 package editdialog
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -105,55 +104,57 @@ func (m *compositeMode) fieldEditor(typeName, value string) inputMode {
 }
 
 func (m *compositeMode) View(contentW int, focused bool, t theme.Styles) string {
-	inputBg := lipgloss.Color("236")
-	if focused {
-		inputBg = lipgloss.Color("238")
-	}
-	inputStyle := lipgloss.NewStyle().
-		Background(inputBg).
-		Width(contentW).
-		Padding(0, 1)
-
 	if len(m.fields) == 0 {
-		return inputStyle.Render(lipgloss.NewStyle().
+		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
-			Render("(no fields)"))
+			Render("(no fields)")
 	}
 
-	// find max label width for alignment
-	maxLabel := 0
+	// label width from longest name
+	maxName := 0
 	for _, f := range m.fields {
-		if len(f.name) > maxLabel {
-			maxLabel = len(f.name)
+		if len(f.name) > maxName {
+			maxName = len(f.name)
 		}
 	}
+	labelW := maxName + 2
+	inputW := max(contentW-labelW, 10)
 
-	var sb strings.Builder
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Width(labelW)
+
+	var lines []string
 	for i, f := range m.fields {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-		label := fmt.Sprintf("%-*s: ", maxLabel, f.name)
+		isCursor := focused && i == m.cursor
 
+		label := labelStyle.Render(f.name)
+
+		inputBg := lipgloss.Color("236")
+		if isCursor {
+			inputBg = lipgloss.Color("238")
+		}
+
+		var valueStr string
 		if m.editing && i == m.cursor {
-			sb.WriteString(label)
-			sb.WriteString(m.editMode.(*textMode).inlineView(focused, t))
-			continue
-		}
-
-		line := label + f.value
-		if focused && i == m.cursor {
-			rendered := lipgloss.NewStyle().
+			valueStr = m.editMode.(*textMode).inlineView(focused, t)
+		} else if isCursor {
+			valueStr = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("232")).
 				Background(t.BorderFocused).
-				Render(line)
-			sb.WriteString(rendered)
+				Render(f.value)
 		} else {
-			sb.WriteString(line)
+			valueStr = f.value
 		}
+
+		input := lipgloss.NewStyle().
+			Background(inputBg).
+			Width(inputW).
+			Padding(0, 1).
+			Render(valueStr)
+
+		lines = append(lines, label+input)
 	}
 
-	return inputStyle.Render(sb.String())
+	return strings.Join(lines, "\n")
 }
 
 func (m *compositeMode) Value() string {

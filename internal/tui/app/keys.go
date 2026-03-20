@@ -100,28 +100,41 @@ func HelpText(activePane pane.ID) string {
 	sb.WriteString("  esc  normal mode\n")
 	sb.WriteString("  :    command mode\n")
 
-	sb.WriteString("\nConnection:\n")
+	sb.WriteString("\nConnection Selector:\n")
 	sb.WriteString("  ctrl+o    switch connection\n")
-	sb.WriteString("  :connect  switch connection\n")
 	sb.WriteString("  a         add connection (in selector)\n")
 	sb.WriteString("  e         edit connection (in selector)\n")
 	sb.WriteString("  d         delete connection (in selector)\n")
 
-	sb.WriteString("\nCommands:\n")
-	sb.WriteString("  :q  :run  :set  :export  :theme\n")
+	sb.WriteString("\nGeneral:\n")
+	sb.WriteString("  :q  :help [topic]\n")
+
+	sb.WriteString("\nQuery:\n")
+	sb.WriteString("  :run  :clear  :set <opt>\n")
+
+	sb.WriteString("\nData:\n")
+	sb.WriteString("  :commit  :rollback  :changes  :export <fmt> <file>\n")
 
 	sb.WriteString("\nBuffers:\n")
 	sb.WriteString("  gt/gT  :new  :bd  :bn/:bp  :b N  :ls\n")
+
+	sb.WriteString("\nConnection:\n")
+	sb.WriteString("  :connect  :refresh  :dump [table]  :schema [name]\n")
+
+	sb.WriteString("\nAppearance:\n")
+	sb.WriteString("  :theme [name]\n")
 
 	// Pane-specific section
 	switch activePane {
 	case pane.TableList:
 		sb.WriteString("\nTable List:\n")
 		sb.WriteString("  j/k    navigate tables\n")
-		sb.WriteString("  gg/G   top/bottom\n")
+		sb.WriteString("  gg/G   top (header)/bottom\n")
 		sb.WriteString("  /      filter tables\n")
 		sb.WriteString("  Enter  query selected table\n")
+		sb.WriteString("  Space  context menu\n")
 		sb.WriteString("  d      describe table\n")
+		sb.WriteString("  D      dump table (database on header)\n")
 		sb.WriteString("  y      yank table name\n")
 		sb.WriteString("  R      refresh schema\n")
 

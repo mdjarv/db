@@ -47,8 +47,9 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 			_ = c.Close(cmd.Context())
 			return err
 		}
+		candidate := &conn.Candidate{Config: cfg, Source: conn.SourceEnvVar}
 		m = app.NewWithOpts(app.Options{
-			Conn: c, Inspector: insp, ConnInfo: connInfo,
+			Conn: c, Inspector: insp, ConnInfo: connInfo, Candidate: candidate,
 			Stores: stores, Creds: creds, GitRoot: gitRoot,
 		})
 	} else {

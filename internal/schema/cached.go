@@ -11,6 +11,7 @@ type CachedInspector struct {
 	inner Inspector
 	mu    sync.RWMutex
 
+	schemas     []string                // cached schema names (nil = not loaded)
 	tables      map[string][]Table      // key: schema
 	columns     map[string][]ColumnInfo // key: schema.table
 	indexes     map[string][]Index      // key: schema.table
@@ -28,6 +29,27 @@ func NewCachedInspector(inner Inspector) *CachedInspector {
 		constraints: make(map[string][]Constraint),
 		foreignKeys: make(map[string][]ForeignKey),
 	}
+}
+
+// Schemas returns cached schema names, querying the inner Inspector on cache miss.
+func (c *CachedInspector) Schemas(ctx context.Context) ([]string, error) {
+	c.mu.RLock()
+	if c.schemas != nil {
+		result := c.schemas
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+
+	result, err := c.inner.Schemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.schemas = result
+	c.mu.Unlock()
+	return result, nil
 }
 
 func tableKey(schema, table string) string {
@@ -145,6 +167,7 @@ func (c *CachedInspector) ForeignKeys(ctx context.Context, schema, table string)
 // Invalidate clears all cached data, forcing re-queries on next access.
 func (c *CachedInspector) Invalidate() {
 	c.mu.Lock()
+	c.schemas = nil
 	c.tables = make(map[string][]Table)
 	c.columns = make(map[string][]ColumnInfo)
 	c.indexes = make(map[string][]Index)

@@ -14,6 +14,7 @@ import (
 // (e.g. SQLite) should accept an empty string and ignore non-default values.
 // For PostgreSQL, an empty string is treated as the dialect's default schema.
 type Inspector interface {
+	Schemas(ctx context.Context) ([]string, error)
 	Tables(ctx context.Context, schema string) ([]Table, error)
 	Columns(ctx context.Context, schema, table string) ([]ColumnInfo, error)
 	Indexes(ctx context.Context, schema, table string) ([]Index, error)

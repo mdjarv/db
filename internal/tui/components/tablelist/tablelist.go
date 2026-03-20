@@ -29,6 +29,7 @@ type Model struct {
 	width    int
 	height   int
 	offset   int
+	schema   string // current schema name for header
 
 	filter    string
 	filtering bool
@@ -36,7 +37,8 @@ type Model struct {
 	view   viewMode
 	detail TableDetail
 
-	lastG bool // for gg sequence
+	onHeader bool // cursor is on the schema header row
+	lastG    bool // for gg sequence
 }
 
 // TableDetail holds schema detail for the selected table.
@@ -100,6 +102,7 @@ func (m *Model) clampOffset() {
 
 func (m *Model) listViewHeight() int {
 	h := m.height - 2 // border
+	h--               // header row
 	h--               // footer hint line
 	if m.filtering {
 		h-- // filter input line
@@ -188,6 +191,12 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 	switch key {
 	case "j", "down":
 		m.lastG = false
+		if m.onHeader {
+			m.onHeader = false
+			m.cursor = 0
+			m.clampOffset()
+			return m.emitSelected()
+		}
 		if m.cursor < len(m.filtered)-1 {
 			m.cursor++
 			m.clampOffset()
@@ -195,6 +204,10 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 		}
 	case "k", "up":
 		m.lastG = false
+		if !m.onHeader && m.cursor == 0 {
+			m.onHeader = true
+			return nil
+		}
 		if m.cursor > 0 {
 			m.cursor--
 			m.clampOffset()
@@ -203,13 +216,15 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 	case "g":
 		if m.lastG {
 			m.lastG = false
+			m.onHeader = true
 			m.cursor = 0
 			m.offset = 0
-			return m.emitSelected()
+			return nil
 		}
 		m.lastG = true
 	case "G":
 		m.lastG = false
+		m.onHeader = false
 		if len(m.filtered) > 0 {
 			m.cursor = len(m.filtered) - 1
 			m.clampOffset()
@@ -231,6 +246,9 @@ func (m *Model) updateList(msg tea.KeyMsg) tea.Cmd {
 		m.detail.offset = 0
 	case "D":
 		m.lastG = false
+		if m.onHeader {
+			return func() tea.Msg { return core.DumpTableMsg{Table: ""} }
+		}
 		if t, ok := m.selected(); ok {
 			name := t.Name
 			return func() tea.Msg { return core.DumpTableMsg{Table: name} }
@@ -322,25 +340,44 @@ func (m *Model) listView() string {
 	s := theme.Current().Styles
 	var sb strings.Builder
 	vh := m.listViewHeight()
-	end := min(m.offset+vh, len(m.filtered))
 
+	// header row
+	schemaLabel := m.schema
+	if schemaLabel == "" {
+		schemaLabel = "Tables"
+	}
+	header := fmt.Sprintf(" %s (%d)", schemaLabel, len(m.tables))
+	if m.onHeader && m.focused {
+		header = s.Cursor.Render(header)
+	} else {
+		header = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).Render(header)
+	}
+	sb.WriteString(header)
+
+	end := min(m.offset+vh, len(m.filtered))
 	nameW := max(m.width-10, 8) // room for padding + count
 
-	for i := m.offset; i < end; i++ {
-		t := m.filtered[i]
-		name := truncate(t.Name, nameW)
+	iconStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
-		line := fmt.Sprintf(" %-*s %6d", nameW, name, t.RowEstimate)
-		if i == m.cursor {
+	for i := m.offset; i < end; i++ {
+		sb.WriteByte('\n')
+		t := m.filtered[i]
+		icon := typeIcon(t.Type)
+		name := truncate(t.Name, nameW-2)
+
+		line := fmt.Sprintf(" %s %-*s %6d", icon, nameW-2, name, t.RowEstimate)
+		if !m.onHeader && i == m.cursor {
 			line = s.Cursor.Render(line)
+		} else {
+			// dim the icon when not on cursor row
+			styledIcon := iconStyle.Render(icon)
+			line = fmt.Sprintf(" %s %-*s %6d", styledIcon, nameW-2, name, t.RowEstimate)
 		}
 		sb.WriteString(line)
-		if i < end-1 {
-			sb.WriteByte('\n')
-		}
 	}
 
 	if len(m.filtered) == 0 {
+		sb.WriteByte('\n')
 		if len(m.tables) == 0 {
 			sb.WriteString("  (no tables)")
 		} else {
@@ -482,6 +519,12 @@ func (m *Model) Cursor() int { return m.cursor }
 
 // IsFiltering returns whether the filter input is active (for testing).
 func (m *Model) IsFiltering() bool { return m.filtering }
+
+// SetSchema sets the schema name shown in the header.
+func (m *Model) SetSchema(name string) { m.schema = name }
+
+// OnHeader returns true when the cursor is on the schema header row.
+func (m *Model) OnHeader() bool { return m.onHeader }
 
 // InDetailView returns true when showing schema detail.
 func (m *Model) InDetailView() bool { return m.view == viewDetail }

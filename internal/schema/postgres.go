@@ -26,6 +26,32 @@ func (p *pgInspector) resolveSchema(s string) string {
 	return s
 }
 
+func (p *pgInspector) Schemas(ctx context.Context) ([]string, error) {
+	const q = `
+SELECT schema_name FROM information_schema.schemata
+WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+ORDER BY schema_name`
+
+	result, err := p.conn.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("schema: schemas: %w", err)
+	}
+	defer result.Rows.Close()
+
+	var schemas []string
+	for result.Rows.Next() {
+		vals, err := result.Rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("schema: schemas row: %w", err)
+		}
+		schemas = append(schemas, asString(vals[0]))
+	}
+	if err := result.Rows.Err(); err != nil {
+		return nil, fmt.Errorf("schema: schemas iter: %w", err)
+	}
+	return schemas, nil
+}
+
 func (p *pgInspector) Tables(ctx context.Context, schemaName string) ([]Table, error) {
 	schema := p.resolveSchema(schemaName)
 	const q = `

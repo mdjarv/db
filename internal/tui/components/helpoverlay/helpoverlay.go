@@ -258,11 +258,18 @@ func contextSections(activePane pane.ID, mode core.Mode) []Section {
 		Title: "Commands",
 		Bindings: []Binding{
 			{":q", "quit"},
+			{":help [topic]", "show help (:help commands for full list)"},
 			{":run", "execute query"},
-			{":set", "toggle settings"},
+			{":clear", "clear query buffer"},
+			{":set <opt>", "toggle settings"},
+			{":commit / :w", "apply pending changes"},
+			{":rollback", "discard pending changes"},
+			{":changes", "list pending changes"},
 			{":export <fmt> <file>", "export results (csv/json/sql)"},
+			{":connect", "open connection selector"},
+			{":refresh", "reload schema"},
+			{":dump [table]", "dump table/database"},
 			{":theme [name]", "list/switch themes"},
-			{":help [topic]", "show help"},
 		},
 	})
 
@@ -568,9 +575,11 @@ var topics = []Topic{
 				},
 			},
 			{
-				Title: "Connection & Theme",
+				Title: "Connection & Schema",
 				Bindings: []Binding{
 					{":connect", "open connection selector"},
+					{":refresh", "reload schema from database"},
+					{":dump [table]", "dump table (or database if no arg)"},
 					{":theme", "list available themes"},
 					{":theme <name>", "switch theme"},
 				},

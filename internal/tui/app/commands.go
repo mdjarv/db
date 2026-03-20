@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mdjarv/db/internal/schema"
 	"github.com/mdjarv/db/internal/tui/components/bufferlist"
 	"github.com/mdjarv/db/internal/tui/components/commandbar"
 	"github.com/mdjarv/db/internal/tui/core"
@@ -42,6 +43,7 @@ var commandRegistry = map[string]cmdHandler{
 	"help":     cmdHelp,
 	"h":        cmdHelp,
 	"dump":     cmdDump,
+	"schema":   cmdSchema,
 }
 
 func (m Model) handleCommand(msg commandbar.ExecuteMsg) (tea.Model, tea.Cmd) {
@@ -204,6 +206,24 @@ func cmdHelp(m *Model, args string) (tea.Model, tea.Cmd) {
 func cmdDump(m *Model, args string) (tea.Model, tea.Cmd) {
 	tableName := strings.TrimSpace(args)
 	return m.openDumpForm(tableName, false)
+}
+
+func cmdSchema(m *Model, args string) (tea.Model, tea.Cmd) {
+	if m.inspector == nil {
+		m.statusBar.SetMessage("not connected")
+		return *m, nil
+	}
+	name := strings.TrimSpace(args)
+	if name == "" {
+		return *m, m.loadSchemas()
+	}
+	m.currentSchema = name
+	m.tableList.SetSchema(name)
+	if ci, ok := m.inspector.(*schema.CachedInspector); ok {
+		ci.Invalidate()
+	}
+	m.statusBar.SetMessage("schema: " + name)
+	return *m, m.loadSchema()
 }
 
 func cmdTheme(m *Model, args string) (tea.Model, tea.Cmd) {

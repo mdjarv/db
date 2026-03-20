@@ -9,18 +9,22 @@ import (
 
 // mockInspector tracks call counts per method.
 type mockInspector struct {
-	mu     sync.Mutex
-	calls  map[string]int
-	tables []Table
-	cols   []ColumnInfo
-	idxs   []Index
-	cons   []Constraint
-	fks    []ForeignKey
-	err    error
+	mu      sync.Mutex
+	calls   map[string]int
+	schemas []string
+	tables  []Table
+	cols    []ColumnInfo
+	idxs    []Index
+	cons    []Constraint
+	fks     []ForeignKey
+	err     error
 }
 
 func newMockInspector() *mockInspector {
-	return &mockInspector{calls: make(map[string]int)}
+	return &mockInspector{
+		calls:   make(map[string]int),
+		schemas: []string{"public"},
+	}
 }
 
 func (m *mockInspector) callCount(method string) int {
@@ -33,6 +37,11 @@ func (m *mockInspector) record(method string) {
 	m.mu.Lock()
 	m.calls[method]++
 	m.mu.Unlock()
+}
+
+func (m *mockInspector) Schemas(_ context.Context) ([]string, error) {
+	m.record("Schemas")
+	return m.schemas, m.err
 }
 
 func (m *mockInspector) Tables(_ context.Context, _ string) ([]Table, error) {

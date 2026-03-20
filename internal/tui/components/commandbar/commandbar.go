@@ -126,6 +126,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 					m.input = ""
 				}
 			}
+		case tea.KeySpace:
+			m.input += " "
 		case tea.KeyRunes:
 			m.input += string(msg.Runes)
 		}
@@ -151,7 +153,7 @@ func (m *Model) tabComplete() {
 func (m *Model) parseCommand(input string) tea.Cmd {
 	parts := strings.SplitN(strings.TrimSpace(input), " ", 2)
 	if len(parts) == 0 || parts[0] == "" {
-		return nil
+		return func() tea.Msg { return CancelMsg{} }
 	}
 	cmd := parts[0]
 	args := ""
@@ -169,11 +171,15 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	prompt := theme.Current().Styles.CommandPrompt.Render(":")
+	s := theme.Current().Styles
+	modeLabel := s.ModeCommand.Render("COMMAND")
+	prompt := s.CommandPrompt.Render(":")
+	prefix := modeLabel + prompt
+	prefixW := lipgloss.Width(prefix)
 
 	input := lipgloss.NewStyle().
-		Width(m.width - 1).
+		Width(max(m.width-prefixW, 1)).
 		Render(m.input + "\u2588")
 
-	return prompt + input
+	return prefix + input
 }

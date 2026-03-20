@@ -130,6 +130,19 @@ func (m *Model) Update(msg tea.KeyMsg) tea.Cmd {
 		return m.mode.Update(msg)
 	}
 
+	// button focus — arrow navigation
+	if m.focus == focusOK || m.focus == focusNull || m.focus == focusCancel {
+		switch msg.String() {
+		case "up", "k":
+			m.focus = focusInput
+		case "left", "h":
+			m.cycleBackward()
+		case "right", "l":
+			m.cycleForward()
+		}
+		return nil
+	}
+
 	return nil
 }
 
@@ -203,7 +216,7 @@ func (m *Model) View(containerW, containerH int) string {
 
 	t := theme.Current().Styles
 
-	w := min(containerW-4, 56)
+	w := min(containerW-4, 68)
 	if w < 30 {
 		w = 30
 	}

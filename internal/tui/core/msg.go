@@ -35,6 +35,12 @@ type SchemaLoadedMsg struct {
 	Err    error
 }
 
+// SchemasLoadedMsg delivers available schema names from Inspector.
+type SchemasLoadedMsg struct {
+	Schemas []string
+	Err     error
+}
+
 // TableSelectedMsg signals cursor moved to a new table.
 type TableSelectedMsg struct {
 	Table schema.Table
@@ -176,8 +182,12 @@ type DumpStartMsg struct {
 }
 
 // DumpProgressMsg carries a progress update from a running dump.
+// Ch and Start are carried so the handler can chain the next read.
 type DumpProgressMsg struct {
 	Event dump.ProgressEvent
+	Ch    <-chan dump.ProgressEvent
+	Start time.Time
+	Path  string
 }
 
 // DumpCompleteMsg signals a dump has finished.

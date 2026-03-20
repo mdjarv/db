@@ -83,7 +83,8 @@ type Model struct {
 	editPKIdx  []int               // PK column indices in result set
 	editCols   []schema.ColumnInfo // column info for current result
 
-	queryTimeout time.Duration // 0 = no timeout
+	currentSchema string        // active schema for browsing
+	queryTimeout  time.Duration // 0 = no timeout
 
 	width       int
 	height      int
@@ -102,6 +103,7 @@ type Options struct {
 	Conn      db.Conn
 	Inspector schema.Inspector
 	ConnInfo  string
+	Candidate *conn.Candidate
 	Stores    []*conn.Store
 	Creds     *conn.CredentialStore
 	GitRoot   string
@@ -110,6 +112,7 @@ type Options struct {
 // New creates the app model with all sub-components.
 func New() Model {
 	tl := tablelist.New()
+	tl.SetSchema("public")
 	qe := queryeditor.New()
 	rv := resultview.New()
 
@@ -122,26 +125,27 @@ func New() Model {
 	bm := NewBufferManager()
 
 	return Model{
-		mode:         core.ModeNormal,
-		panes:        pm,
-		tableList:    tl,
-		queryEditor:  qe,
-		resultView:   rv,
-		statusBar:    statusbar.New(),
-		commandBar:   commandbar.New(),
-		dialog:       dialog.New(),
-		editDialog:   editdialog.New(),
-		contextMenu:  contextmenu.New(),
-		connSelector: connselector.New(),
-		connForm:     connform.New(),
-		dumpForm:     dumpform.New(),
-		dumpProgress: dialog.NewProgress(),
-		bufferList:   bufferlist.New(),
-		helpOverlay:  helpoverlay.New(),
-		tableDetail:  tabledetail.New(),
-		buffers:      bm,
-		changeBuf:    editor.NewChangeBuffer(),
-		leftRatio:    defaultLeftRatio,
+		mode:          core.ModeNormal,
+		panes:         pm,
+		tableList:     tl,
+		queryEditor:   qe,
+		resultView:    rv,
+		statusBar:     statusbar.New(),
+		commandBar:    commandbar.New(),
+		dialog:        dialog.New(),
+		editDialog:    editdialog.New(),
+		contextMenu:   contextmenu.New(),
+		connSelector:  connselector.New(),
+		connForm:      connform.New(),
+		dumpForm:      dumpform.New(),
+		dumpProgress:  dialog.NewProgress(),
+		bufferList:    bufferlist.New(),
+		helpOverlay:   helpoverlay.New(),
+		tableDetail:   tabledetail.New(),
+		buffers:       bm,
+		changeBuf:     editor.NewChangeBuffer(),
+		leftRatio:     defaultLeftRatio,
+		currentSchema: "public",
 	}
 }
 
@@ -162,6 +166,7 @@ func NewWithOpts(opts Options) Model {
 	m.stores = opts.Stores
 	m.creds = opts.Creds
 	m.gitRoot = opts.GitRoot
+	m.lastCandidate = opts.Candidate
 	if opts.ConnInfo != "" {
 		m.statusBar.SetConn(opts.ConnInfo)
 	}
@@ -238,6 +243,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusBar.SetSuccess(fmt.Sprintf("loaded %d tables", len(msg.Tables)))
 		return m, cmd
+
+	case core.SchemasLoadedMsg:
+		if msg.Err != nil {
+			errCmd := m.statusBar.SetError("schema list failed: " + msg.Err.Error())
+			return m, errCmd
+		}
+		m.statusBar.SetMessage("schemas: " + strings.Join(msg.Schemas, ", "))
+		return m, nil
 
 	case core.TableSelectedMsg:
 		m.statusBar.SetMessage(msg.Table.Name)
@@ -437,6 +450,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultView.ClearModified()
 		m.editPKCols = nil
 		m.editPKIdx = nil
+		m.currentSchema = "public"
+		m.tableList.SetSchema("public")
 		m.statusBar.SetSuccess("connected: " + msg.ConnInfo)
 		m.saveDefault(msg.Candidate)
 		return m, m.loadSchema()
@@ -681,10 +696,18 @@ func formatSlice(vals []any) string {
 
 func (m Model) loadSchema() tea.Cmd {
 	insp := m.inspector
+	schemaName := m.currentSchema
 	return func() tea.Msg {
-		// Empty schema → let the inspector pick its driver-default namespace.
-		tables, err := insp.Tables(context.Background(), "")
+		tables, err := insp.Tables(context.Background(), schemaName)
 		return core.SchemaLoadedMsg{Tables: tables, Err: err}
+	}
+}
+
+func (m Model) loadSchemas() tea.Cmd {
+	insp := m.inspector
+	return func() tea.Msg {
+		schemas, err := insp.Schemas(context.Background())
+		return core.SchemasLoadedMsg{Schemas: schemas, Err: err}
 	}
 }
 
@@ -827,10 +850,14 @@ func (m *Model) openDumpForm(tableName string, schemaOnly bool) (Model, tea.Cmd)
 	if password == "" && m.creds != nil {
 		password, _ = m.creds.GetPassword(cfg.Name)
 	}
+	var tableNames []string
+	for _, t := range m.tableList.Tables() {
+		tableNames = append(tableNames, t.Name)
+	}
 	if schemaOnly {
-		m.dumpForm.OpenSchemaOnly(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode)
+		m.dumpForm.OpenSchemaOnly(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode, tableNames)
 	} else {
-		m.dumpForm.Open(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode)
+		m.dumpForm.Open(tableName, cfg.DBName, cfg.Host, port, cfg.User, password, cfg.SSLMode, tableNames)
 	}
 	return *m, nil
 }
@@ -852,7 +879,7 @@ func (m *Model) handleDumpFormSubmit(msg dumpform.SubmitMsg) (Model, tea.Cmd) {
 	return *m, m.runDump(ctx, binPath, cfg)
 }
 
-// runDump starts pg_dump and returns a tea.Cmd that sends progress/complete messages.
+// runDump starts pg_dump and returns a tea.Cmd that reads the first progress event.
 func (m *Model) runDump(ctx context.Context, binPath string, cfg dump.Config) tea.Cmd {
 	return func() tea.Msg {
 		runner := dump.NewRunner(binPath)
@@ -866,46 +893,63 @@ func (m *Model) runDump(ctx context.Context, binPath string, cfg dump.Config) te
 			}
 		}
 
-		// Drain progress channel, forwarding events via a program-level
-		// subscription is not possible from a tea.Cmd. Instead we collect
-		// all events and emit the final result. Progress updates are sent
-		// as intermediate messages via the returned Batch.
-		var lastEvent dump.ProgressEvent
-		for ev := range ch {
-			lastEvent = ev
-		}
+		return readDumpEvent(ch, start, cfg.OutputPath)
+	}
+}
 
-		if lastEvent.Err != nil {
-			return core.DumpCompleteMsg{
-				Path:     cfg.OutputPath,
-				Duration: time.Since(start),
-				Err:      lastEvent.Err,
-			}
-		}
-
+// readDumpEvent reads one event from the dump channel.
+// Returns DumpProgressMsg for intermediate events, DumpCompleteMsg when done.
+func readDumpEvent(ch <-chan dump.ProgressEvent, start time.Time, path string) tea.Msg {
+	ev, ok := <-ch
+	if !ok {
+		// channel closed without Done — treat as complete
 		var size int64
-		if fi, err := os.Stat(cfg.OutputPath); err == nil {
+		if fi, err := os.Stat(path); err == nil {
 			size = fi.Size()
 		}
-
 		return core.DumpCompleteMsg{
-			Path:     cfg.OutputPath,
+			Path:     path,
 			Size:     size,
 			Duration: time.Since(start),
 		}
 	}
+	if ev.Err != nil {
+		return core.DumpCompleteMsg{
+			Path:     path,
+			Duration: time.Since(start),
+			Err:      ev.Err,
+		}
+	}
+	if ev.Done {
+		var size int64
+		if fi, err := os.Stat(path); err == nil {
+			size = fi.Size()
+		}
+		return core.DumpCompleteMsg{
+			Path:     path,
+			Size:     size,
+			Duration: time.Since(start),
+		}
+	}
+	return core.DumpProgressMsg{
+		Event: ev,
+		Ch:    ch,
+		Start: start,
+		Path:  path,
+	}
 }
 
-// handleDumpProgress updates the progress modal.
-func (m *Model) handleDumpProgress(msg core.DumpProgressMsg) (Model, tea.Cmd) {
-	ev := msg.Event
-	if ev.Err != nil {
-		m.dumpProgress.Close()
-		errCmd := m.statusBar.SetError("dump failed: " + ev.Err.Error())
-		return *m, errCmd
+// nextDumpEvent returns a tea.Cmd that reads the next event from the channel.
+func nextDumpEvent(ch <-chan dump.ProgressEvent, start time.Time, path string) tea.Cmd {
+	return func() tea.Msg {
+		return readDumpEvent(ch, start, path)
 	}
-	m.dumpProgress.SetProgress(ev.Object, ev.Index, ev.Total)
-	return *m, nil
+}
+
+// handleDumpProgress updates the progress modal and chains the next read.
+func (m *Model) handleDumpProgress(msg core.DumpProgressMsg) (Model, tea.Cmd) {
+	m.dumpProgress.SetProgress(msg.Event.Object, msg.Event.Index, msg.Event.Total)
+	return *m, nextDumpEvent(msg.Ch, msg.Start, msg.Path)
 }
 
 // handleDumpComplete dismisses the progress modal and shows result.
@@ -1120,7 +1164,11 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Space on table list opens context menu
 	if m.mode == core.ModeNormal && m.panes.ActiveID() == pane.TableList && msg.String() == " " {
-		m.openTableContextMenu()
+		if m.tableList.OnHeader() {
+			m.openDatabaseContextMenu()
+		} else {
+			m.openTableContextMenu()
+		}
 		return m, nil
 	}
 
@@ -1163,9 +1211,6 @@ func (m Model) handleKeyInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) recalcLayout() {
 	contentHeight := m.height - 1
-	if m.commandBar.Active() {
-		contentHeight--
-	}
 
 	leftW := max(int(float64(m.width)*m.leftRatio), minPaneWidth)
 	rightW := max(m.width-leftW, minPaneWidth)
@@ -1240,7 +1285,7 @@ func (m Model) View() string {
 
 	var bottom string
 	if m.commandBar.Active() {
-		bottom = m.commandBar.View() + "\n" + m.statusBar.View()
+		bottom = m.commandBar.View()
 	} else {
 		bottom = m.statusBar.View()
 	}
@@ -1256,6 +1301,15 @@ func (m *Model) OpenHelp(topic string) {
 		m.helpOverlay.OpenTopic(topic)
 	}
 	m.showHelp = true
+}
+
+// openDatabaseContextMenu opens the context menu for database-level actions.
+func (m *Model) openDatabaseContextMenu() {
+	m.contextMenu.Open([]contextmenu.MenuItem{
+		{Label: "Dump database", ActionID: "dump-db"},
+		{Label: "Dump schema only", ActionID: "dump-db-schema"},
+		{Label: "Refresh schema", ActionID: "refresh"},
+	})
 }
 
 // openTableContextMenu opens the context menu for the selected table.
@@ -1281,6 +1335,10 @@ func (m Model) handleContextMenuAction(actionID string) (tea.Model, tea.Cmd) {
 		}
 	case "describe":
 		m.tableList.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	case "dump-db":
+		return m, func() tea.Msg { return core.DumpTableMsg{Table: ""} }
+	case "dump-db-schema":
+		return m, func() tea.Msg { return core.DumpSchemaMsg{Table: ""} }
 	case "dump-table":
 		if t, ok := m.selectedTable(); ok {
 			name := quoteTableIdent(t.Schema, t.Name)
