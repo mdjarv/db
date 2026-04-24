@@ -94,6 +94,62 @@ func TestParseDSN(t *testing.T) {
 	}
 }
 
+func TestParseDSN_SQLite(t *testing.T) {
+	tests := []struct {
+		name    string
+		dsn     string
+		wantP   string
+		wantErr bool
+	}{
+		{name: "sqlite rel", dsn: "sqlite://mydb.db", wantP: "mydb.db"},
+		{name: "sqlite abs", dsn: "sqlite:///var/db/app.db", wantP: "/var/db/app.db"},
+		{name: "sqlite3 scheme", dsn: "sqlite3://mydb.db", wantP: "mydb.db"},
+		{name: "sqlite memory", dsn: "sqlite://:memory:", wantP: ":memory:"},
+		{name: "file scheme rel", dsn: "file:./local.db", wantP: "./local.db"},
+		{name: "file scheme abs", dsn: "file:/srv/data.db", wantP: "/srv/data.db"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDSN(tt.dsn)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Driver != DriverSQLite {
+				t.Errorf("Driver = %q, want %q", got.Driver, DriverSQLite)
+			}
+			if got.Path != tt.wantP {
+				t.Errorf("Path = %q, want %q", got.Path, tt.wantP)
+			}
+		})
+	}
+}
+
+func TestSQLiteDSNRoundTrip(t *testing.T) {
+	orig := ConnectionConfig{Driver: DriverSQLite, Path: "/tmp/x.db"}
+	parsed, err := ParseDSN(orig.DSN())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if parsed.Driver != DriverSQLite || parsed.Path != orig.Path {
+		t.Errorf("round-trip mismatch: got %+v, want %+v", parsed, orig)
+	}
+}
+
+func TestDriverOrDefault(t *testing.T) {
+	if (ConnectionConfig{}).DriverOrDefault() != DriverPostgres {
+		t.Error("empty driver should default to postgres")
+	}
+	if (ConnectionConfig{Driver: DriverSQLite}).DriverOrDefault() != DriverSQLite {
+		t.Error("explicit driver should be preserved")
+	}
+}
+
 func TestDSNRoundTrip(t *testing.T) {
 	orig := ConnectionConfig{
 		Host:     "db.example.com",

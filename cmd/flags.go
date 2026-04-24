@@ -68,7 +68,7 @@ func connectFromFlags(cmd *cobra.Command) (db.Conn, error) {
 	if err != nil {
 		return nil, classifyConnError(err)
 	}
-	c, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
+	c, err := db.Open(cmd.Context(), cfg.DriverOrDefault(), cfg.DSN())
 	if err != nil {
 		return nil, classifyConnError(err)
 	}

@@ -18,7 +18,16 @@ func NewPostgresInspector(conn db.Conn) Inspector {
 	return &pgInspector{conn: conn}
 }
 
-func (p *pgInspector) Tables(ctx context.Context, schema string) ([]Table, error) {
+// resolveSchema returns the target namespace, defaulting to "public" when empty.
+func (p *pgInspector) resolveSchema(s string) string {
+	if s == "" {
+		return "public"
+	}
+	return s
+}
+
+func (p *pgInspector) Tables(ctx context.Context, schemaName string) ([]Table, error) {
+	schema := p.resolveSchema(schemaName)
 	const q = `
 SELECT
 	t.table_name,
@@ -72,7 +81,8 @@ ORDER BY table_type, table_name`
 	return tables, nil
 }
 
-func (p *pgInspector) Columns(ctx context.Context, schema, table string) ([]ColumnInfo, error) {
+func (p *pgInspector) Columns(ctx context.Context, schemaName, table string) ([]ColumnInfo, error) {
+	schema := p.resolveSchema(schemaName)
 	const q = `
 SELECT
 	c.column_name,
@@ -126,7 +136,8 @@ ORDER BY c.ordinal_position`
 	return cols, nil
 }
 
-func (p *pgInspector) Indexes(ctx context.Context, schema, table string) ([]Index, error) {
+func (p *pgInspector) Indexes(ctx context.Context, schemaName, table string) ([]Index, error) {
+	schema := p.resolveSchema(schemaName)
 	const q = `
 SELECT
 	i.indexname,
@@ -170,7 +181,8 @@ ORDER BY i.indexname`
 	return indexes, nil
 }
 
-func (p *pgInspector) Constraints(ctx context.Context, schema, table string) ([]Constraint, error) {
+func (p *pgInspector) Constraints(ctx context.Context, schemaName, table string) ([]Constraint, error) {
+	schema := p.resolveSchema(schemaName)
 	const q = `
 SELECT
 	con.conname,
@@ -227,7 +239,8 @@ ORDER BY
 	return constraints, nil
 }
 
-func (p *pgInspector) ForeignKeys(ctx context.Context, schema, table string) ([]ForeignKey, error) {
+func (p *pgInspector) ForeignKeys(ctx context.Context, schemaName, table string) ([]ForeignKey, error) {
+	schema := p.resolveSchema(schemaName)
 	const q = `
 SELECT
 	con.conname,

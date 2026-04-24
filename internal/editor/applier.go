@@ -22,20 +22,21 @@ func Apply(ctx context.Context, conn db.Conn, changes []Change, autocommit bool)
 		return ApplyResult{}
 	}
 
+	d := conn.Dialect()
 	if autocommit {
-		return applyAutocommit(ctx, conn, changes)
+		return applyAutocommit(ctx, conn, d, changes)
 	}
-	return applyExplicit(ctx, conn, changes)
+	return applyExplicit(ctx, conn, d, changes)
 }
 
-func applyExplicit(ctx context.Context, conn db.Conn, changes []Change) ApplyResult {
+func applyExplicit(ctx context.Context, conn db.Conn, d db.Dialect, changes []Change) ApplyResult {
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return ApplyResult{Err: fmt.Errorf("begin transaction: %w", err)}
 	}
 
 	for i, c := range changes {
-		dml := changeToDML(c)
+		dml := changeToDML(d, c)
 		_, err := tx.Exec(ctx, dml.SQL, dml.Args...)
 		if err != nil {
 			_ = tx.Rollback(ctx)
@@ -46,9 +47,9 @@ func applyExplicit(ctx context.Context, conn db.Conn, changes []Change) ApplyRes
 	return ApplyResult{Applied: len(changes), Tx: tx}
 }
 
-func applyAutocommit(ctx context.Context, conn db.Conn, changes []Change) ApplyResult {
+func applyAutocommit(ctx context.Context, conn db.Conn, d db.Dialect, changes []Change) ApplyResult {
 	for i, c := range changes {
-		dml := changeToDML(c)
+		dml := changeToDML(d, c)
 		_, err := conn.Exec(ctx, dml.SQL, dml.Args...)
 		if err != nil {
 			return ApplyResult{Applied: i, Err: fmt.Errorf("change %d: %w", i+1, err)}
@@ -57,14 +58,14 @@ func applyAutocommit(ctx context.Context, conn db.Conn, changes []Change) ApplyR
 	return ApplyResult{Applied: len(changes)}
 }
 
-func changeToDML(c Change) DMLResult {
+func changeToDML(d db.Dialect, c Change) DMLResult {
 	switch c.Kind {
 	case ChangeUpdate:
-		return GenerateUpdate(c.Schema, c.Table, c.PK, c.Column, c.NewValue)
+		return GenerateUpdate(d, c.Schema, c.Table, c.PK, c.Column, c.NewValue)
 	case ChangeInsert:
-		return GenerateInsert(c.Schema, c.Table, c.Row)
+		return GenerateInsert(d, c.Schema, c.Table, c.Row)
 	case ChangeDelete:
-		return GenerateDelete(c.Schema, c.Table, c.PK)
+		return GenerateDelete(d, c.Schema, c.Table, c.PK)
 	default:
 		return DMLResult{}
 	}

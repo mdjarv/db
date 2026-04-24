@@ -17,7 +17,7 @@ var tablesCmd = &cobra.Command{
 }
 
 func init() {
-	tablesCmd.Flags().String("schema", "public", "schema name")
+	tablesCmd.Flags().String("schema", "", "schema name (driver default if empty)")
 	rootCmd.AddCommand(tablesCmd)
 }
 
@@ -29,7 +29,10 @@ func runTables(cmd *cobra.Command, _ []string) error {
 	defer func() { _ = conn.Close(cmd.Context()) }()
 
 	schemaName, _ := cmd.Flags().GetString("schema")
-	insp := schema.NewPostgresInspector(conn)
+	insp, err := schema.NewInspector(conn)
+	if err != nil {
+		return err
+	}
 
 	tables, err := insp.Tables(cmd.Context(), schemaName)
 	if err != nil {

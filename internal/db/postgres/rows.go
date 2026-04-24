@@ -13,7 +13,6 @@ func buildResult(rows pgx.Rows, tm *TypeMap) db.Result {
 		cols[i] = db.Column{
 			Name:       fd.Name,
 			TypeName:   tm.Resolve(fd.DataTypeOID),
-			TypeOID:    fd.DataTypeOID,
 			EnumValues: tm.EnumValues(fd.DataTypeOID),
 		}
 		if pgFields := tm.CompositeFields(fd.DataTypeOID); pgFields != nil {

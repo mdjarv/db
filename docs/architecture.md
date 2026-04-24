@@ -30,17 +30,51 @@ type Conn interface {
     Query(ctx context.Context, sql string, args ...any) (Result, error)
     Exec(ctx context.Context, sql string, args ...any) (ExecResult, error)
     Begin(ctx context.Context) (Tx, error)
+    Dialect() Dialect
     Close(ctx context.Context) error
-    // Schema inspection is separate — see Inspector
 }
 
 type Tx interface {
     Query(ctx context.Context, sql string, args ...any) (Result, error)
     Exec(ctx context.Context, sql string, args ...any) (ExecResult, error)
+    Dialect() Dialect
     Commit(ctx context.Context) error
     Rollback(ctx context.Context) error
 }
 ```
+
+Drivers register themselves via `init()`:
+
+```go
+db.Register("postgres", &Driver{})
+```
+
+Callers open connections by name or by DSN scheme:
+
+```go
+c, err := db.Open(ctx, "postgres", dsn)  // explicit driver name
+c, err := db.OpenDSN(ctx, "sqlite:///path/to/file.db")  // scheme-dispatched
+```
+
+### Dialect
+
+Dialect captures the SQL syntax that varies between drivers so that feature
+layers (editor DML generation, identifier quoting) stay driver-agnostic.
+
+```go
+type Dialect struct {
+    Name            string
+    Placeholder     func(n int) string // $1 / ?
+    QuoteIdent      func(s string) string
+    DefaultSchema   string
+    SupportsSchemas bool
+}
+
+func (d Dialect) QualifyTable(schema, table string) string
+```
+
+`db.PostgresDialect()` and `db.SQLiteDialect()` provide defaults. Each
+driver's `Conn`/`Tx` returns its dialect via `Dialect()`.
 
 ### Result
 
@@ -60,31 +94,19 @@ type RowIterator interface {
 type Column struct {
     Name            string
     TypeName        string
-    TypeOID         uint32
-    EnumValues      []string         // non-nil for enum types
-    CompositeFields []CompositeField // non-nil for composite types
+    EnumValues      []string         // optional (nil if unsupported)
+    CompositeFields []CompositeField // optional (nil if unsupported)
 }
 
 type CompositeField struct {
     Name     string
     TypeName string
 }
-
-// Optional — implemented by postgres driver for `db introspect`
-type TypeIntrospector interface {
-    TypeDetail(oid uint32) TypeDetail
-}
-
-type TypeDetail struct {
-    OID             uint32
-    Name            string
-    IsArray         bool
-    ElemOID         uint32
-    ElemTypeName    string
-    EnumValues      []string
-    CompositeFields []CompositeField
-}
 ```
+
+`Column.IsArray()` and `Column.ElemTypeName()` derive array metadata from
+the type name (trailing `[]`), so introspection does not need driver-
+specific OIDs.
 
 ### Inspector
 
@@ -96,6 +118,17 @@ type Inspector interface {
     Constraints(ctx context.Context, schema string, table string) ([]Constraint, error)
     ForeignKeys(ctx context.Context, schema string, table string) ([]ForeignKey, error)
 }
+```
+
+An empty `schema` argument means "use the driver's default namespace". The
+PostgreSQL inspector normalises it to `public`; drivers without schema
+namespaces (SQLite) should ignore non-empty values.
+
+Each driver's `*Conn` exposes `Inspector() schema.Inspector`. Call-sites
+obtain an inspector driver-agnostically via:
+
+```go
+insp, err := schema.NewInspector(conn)
 ```
 
 ### Exporter
@@ -176,8 +209,24 @@ Shift-Tab     → cycle focus backward
 
 ## Adding a New Database Driver
 
-1. Create `internal/db/sqlite/` (or mysql, etc.)
-2. Implement `Driver`, `Conn`, `Tx` interfaces
-3. Create `internal/schema/sqlite.go` implementing `Inspector`
-4. Register driver in a factory: `db.Register("sqlite", &sqlite.Driver{})`
-5. All feature layers (query, export, editor) work unchanged
+The `db.Conn` interface is the only contract a driver must satisfy. Drivers
+are selected by name (registry) or by DSN scheme (`db.OpenDSN`).
+
+1. Create `internal/db/<driver>/` (e.g. `internal/db/sqlite/`).
+2. Implement `db.Driver`, `db.Conn`, `db.Tx`. `Conn` and `Tx` both return a
+   `db.Dialect` describing placeholder syntax, identifier quoting, and
+   whether the driver supports schema namespaces. Two dialects ship in
+   `internal/db`: `PostgresDialect()` and `SQLiteDialect()`.
+3. Create `internal/schema/<driver>.go` implementing `schema.Inspector`.
+   Drivers without schema namespaces should accept an empty schema argument
+   and ignore non-default values.
+4. Expose `(*Conn).Inspector() schema.Inspector` so `schema.NewInspector`
+   can locate it via type assertion.
+5. Register the driver in `init()`: `db.Register("sqlite", &Driver{})`.
+6. Add the scheme mapping to `conn.DriverFromScheme` and the corresponding
+   `DSN`/`ParseDSN` arm in `internal/conn/config.go`.
+7. Blank-import the driver from `cmd/flags.go` to register it at startup.
+
+All feature layers (query, export, editor) are driver-agnostic: they use
+`Dialect` for placeholder/quoting and `Inspector` for metadata, never raw
+driver types.

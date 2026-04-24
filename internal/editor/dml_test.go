@@ -1,10 +1,16 @@
 package editor
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/mdjarv/db/internal/db"
+)
+
+func pgDialect() db.Dialect { return db.PostgresDialect() }
 
 func TestGenerateUpdate(t *testing.T) {
 	pk := PKValue{Columns: []string{"id"}, Values: []any{42}}
-	r := GenerateUpdate("public", "users", pk, "name", "Bob")
+	r := GenerateUpdate(pgDialect(), "public", "users", pk, "name", "Bob")
 
 	want := `UPDATE "public"."users" SET "name" = $1 WHERE "id" = $2`
 	if r.SQL != want {
@@ -17,7 +23,7 @@ func TestGenerateUpdate(t *testing.T) {
 
 func TestGenerateUpdate_NullPK(t *testing.T) {
 	pk := PKValue{Columns: []string{"id", "seq"}, Values: []any{1, nil}}
-	r := GenerateUpdate("public", "t", pk, "val", "x")
+	r := GenerateUpdate(pgDialect(), "public", "t", pk, "val", "x")
 
 	want := `UPDATE "public"."t" SET "val" = $1 WHERE "id" = $2 AND "seq" IS NULL`
 	if r.SQL != want {
@@ -30,7 +36,7 @@ func TestGenerateUpdate_NullPK(t *testing.T) {
 
 func TestGenerateUpdate_NullNewValue(t *testing.T) {
 	pk := PKValue{Columns: []string{"id"}, Values: []any{1}}
-	r := GenerateUpdate("public", "t", pk, "name", nil)
+	r := GenerateUpdate(pgDialect(), "public", "t", pk, "name", nil)
 
 	want := `UPDATE "public"."t" SET "name" = $1 WHERE "id" = $2`
 	if r.SQL != want {
@@ -46,7 +52,7 @@ func TestGenerateUpdate_NullNewValue(t *testing.T) {
 
 func TestGenerateInsert(t *testing.T) {
 	vals := map[string]any{"name": "Alice", "age": 30}
-	r := GenerateInsert("public", "users", vals)
+	r := GenerateInsert(pgDialect(), "public", "users", vals)
 
 	// map iteration order is non-deterministic, so check structure
 	if len(r.Args) != 2 {
@@ -58,7 +64,7 @@ func TestGenerateInsert(t *testing.T) {
 }
 
 func TestGenerateInsert_Empty(t *testing.T) {
-	r := GenerateInsert("public", "t", nil)
+	r := GenerateInsert(pgDialect(), "public", "t", nil)
 	want := `INSERT INTO "public"."t" DEFAULT VALUES`
 	if r.SQL != want {
 		t.Errorf("SQL:\n got  %s\n want %s", r.SQL, want)
@@ -70,7 +76,7 @@ func TestGenerateInsert_Empty(t *testing.T) {
 
 func TestGenerateInsert_NullValue(t *testing.T) {
 	vals := map[string]any{"name": nil}
-	r := GenerateInsert("public", "t", vals)
+	r := GenerateInsert(pgDialect(), "public", "t", vals)
 
 	want := `INSERT INTO "public"."t" ("name") VALUES (NULL)`
 	if r.SQL != want {
@@ -83,7 +89,7 @@ func TestGenerateInsert_NullValue(t *testing.T) {
 
 func TestGenerateDelete(t *testing.T) {
 	pk := PKValue{Columns: []string{"id"}, Values: []any{42}}
-	r := GenerateDelete("public", "users", pk)
+	r := GenerateDelete(pgDialect(), "public", "users", pk)
 
 	want := `DELETE FROM "public"."users" WHERE "id" = $1`
 	if r.SQL != want {
@@ -96,28 +102,33 @@ func TestGenerateDelete(t *testing.T) {
 
 func TestGenerateDelete_CompositePK(t *testing.T) {
 	pk := PKValue{Columns: []string{"a", "b"}, Values: []any{1, 2}}
-	r := GenerateDelete("public", "t", pk)
+	r := GenerateDelete(pgDialect(), "public", "t", pk)
 
 	want := `DELETE FROM "public"."t" WHERE "a" = $1 AND "b" = $2`
 	if r.SQL != want {
 		t.Errorf("SQL:\n got  %s\n want %s", r.SQL, want)
 	}
 	if len(r.Args) != 2 {
-		t.Errorf("args: got %v, want [1 2]", r.Args)
+		t.Errorf("args: got %v", r.Args)
 	}
 }
 
-func TestQuoteIdent(t *testing.T) {
-	tests := []struct {
-		in, want string
-	}{
-		{"users", `"users"`},
-		{`my"table`, `"my""table"`},
+func TestGenerateUpdate_SQLite(t *testing.T) {
+	pk := PKValue{Columns: []string{"id"}, Values: []any{42}}
+	r := GenerateUpdate(db.SQLiteDialect(), "", "users", pk, "name", "Bob")
+
+	want := `UPDATE "users" SET "name" = ? WHERE "id" = ?`
+	if r.SQL != want {
+		t.Errorf("SQL:\n got  %s\n want %s", r.SQL, want)
 	}
-	for _, tt := range tests {
-		got := quoteIdent(tt.in)
-		if got != tt.want {
-			t.Errorf("quoteIdent(%q) = %q, want %q", tt.in, got, tt.want)
-		}
+}
+
+func TestGenerateDelete_SQLite(t *testing.T) {
+	pk := PKValue{Columns: []string{"a", "b"}, Values: []any{1, 2}}
+	r := GenerateDelete(db.SQLiteDialect(), "", "t", pk)
+
+	want := `DELETE FROM "t" WHERE "a" = ? AND "b" = ?`
+	if r.SQL != want {
+		t.Errorf("SQL:\n got  %s\n want %s", r.SQL, want)
 	}
 }

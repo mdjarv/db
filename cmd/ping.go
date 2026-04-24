@@ -30,7 +30,7 @@ func runPing(cmd *cobra.Command, _ []string) error {
 	defer cancel()
 
 	start := time.Now()
-	c, err := db.Open(ctx, "postgres", cfg.DSN())
+	c, err := db.Open(ctx, cfg.DriverOrDefault(), cfg.DSN())
 	if err != nil {
 		return classifyConnError(err)
 	}

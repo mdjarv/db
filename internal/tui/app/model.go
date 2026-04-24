@@ -682,7 +682,8 @@ func formatSlice(vals []any) string {
 func (m Model) loadSchema() tea.Cmd {
 	insp := m.inspector
 	return func() tea.Msg {
-		tables, err := insp.Tables(context.Background(), "public")
+		// Empty schema → let the inspector pick its driver-default namespace.
+		tables, err := insp.Tables(context.Background(), "")
 		return core.SchemaLoadedMsg{Tables: tables, Err: err}
 	}
 }
@@ -744,14 +745,27 @@ func (m *Model) handleConnectionLost() (Model, tea.Cmd) {
 func (m Model) connectTo(candidate conn.Candidate) tea.Cmd {
 	cfg := candidate.Config
 	return func() tea.Msg {
-		c, err := db.Open(context.Background(), "postgres", cfg.DSN())
+		c, err := db.Open(context.Background(), cfg.DriverOrDefault(), cfg.DSN())
 		if err != nil {
 			return core.ConnectErrorMsg{Err: err}
 		}
-		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
-		insp := schema.NewCachedInspector(schema.NewPostgresInspector(c))
+		base, err := schema.NewInspector(c)
+		if err != nil {
+			_ = c.Close(context.Background())
+			return core.ConnectErrorMsg{Err: err}
+		}
+		connInfo := candidateConnInfo(cfg)
+		insp := schema.NewCachedInspector(base)
 		return core.ConnectedMsg{Conn: c, Inspector: insp, ConnInfo: connInfo, Candidate: candidate}
 	}
+}
+
+// candidateConnInfo formats a short label for the status bar.
+func candidateConnInfo(cfg conn.ConnectionConfig) string {
+	if cfg.DriverOrDefault() == conn.DriverSQLite {
+		return "sqlite:" + cfg.Path
+	}
+	return fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
 }
 
 // saveDefault persists the selected candidate as the default connection.

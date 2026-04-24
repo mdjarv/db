@@ -13,18 +13,15 @@ type Conn interface {
 	Query(ctx context.Context, sql string, args ...any) (Result, error)
 	Exec(ctx context.Context, sql string, args ...any) (ExecResult, error)
 	Begin(ctx context.Context) (Tx, error)
+	Dialect() Dialect
 	Close(ctx context.Context) error
-}
-
-// TypeIntrospector provides detailed type information for debugging.
-type TypeIntrospector interface {
-	TypeDetail(oid uint32) TypeDetail
 }
 
 // Tx is a database transaction.
 type Tx interface {
 	Query(ctx context.Context, sql string, args ...any) (Result, error)
 	Exec(ctx context.Context, sql string, args ...any) (ExecResult, error)
+	Dialect() Dialect
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 }

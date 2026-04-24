@@ -44,6 +44,8 @@ func (tx *mockTx) Rollback(_ context.Context) error {
 	return nil
 }
 
+func (tx *mockTx) Dialect() db.Dialect { return db.PostgresDialect() }
+
 type mockConn struct {
 	tx       *mockTx
 	beginErr error
@@ -74,6 +76,8 @@ func (c *mockConn) Begin(_ context.Context) (db.Tx, error) {
 }
 
 func (c *mockConn) Close(_ context.Context) error { return nil }
+
+func (c *mockConn) Dialect() db.Dialect { return db.PostgresDialect() }
 
 func TestApply_ExplicitCommit(t *testing.T) {
 	tx := &mockTx{}

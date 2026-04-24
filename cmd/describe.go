@@ -20,7 +20,7 @@ var describeCmd = &cobra.Command{
 }
 
 func init() {
-	describeCmd.Flags().String("schema", "public", "schema name")
+	describeCmd.Flags().String("schema", "", "schema name (driver default if empty)")
 	rootCmd.AddCommand(describeCmd)
 }
 
@@ -34,7 +34,10 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 	schemaName, _ := cmd.Flags().GetString("schema")
 	table := args[0]
 	ctx := cmd.Context()
-	insp := schema.NewPostgresInspector(conn)
+	insp, err := schema.NewInspector(conn)
+	if err != nil {
+		return err
+	}
 
 	cols, err := insp.Columns(ctx, schemaName, table)
 	if err != nil {

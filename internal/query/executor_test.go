@@ -27,6 +27,8 @@ func (m *mockConn) Begin(ctx context.Context) (db.Tx, error) {
 	return m.beginFn(ctx)
 }
 
+func (m *mockConn) Dialect() db.Dialect { return db.PostgresDialect() }
+
 func (m *mockConn) Close(ctx context.Context) error {
 	return m.closeFn(ctx)
 }
@@ -53,6 +55,8 @@ func (m *mockTx) Commit(ctx context.Context) error {
 func (m *mockTx) Rollback(ctx context.Context) error {
 	return m.rollbackFn(ctx)
 }
+
+func (m *mockTx) Dialect() db.Dialect { return db.PostgresDialect() }
 
 type sliceIter struct {
 	rows [][]any

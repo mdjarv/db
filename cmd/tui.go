@@ -37,12 +37,16 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 
 	var m app.Model
 	if err == nil {
-		c, err := db.Open(cmd.Context(), "postgres", cfg.DSN())
+		c, err := db.Open(cmd.Context(), cfg.DriverOrDefault(), cfg.DSN())
 		if err != nil {
 			return classifyConnError(err)
 		}
-		connInfo := fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
-		insp := schema.NewPostgresInspector(c)
+		connInfo := formatConnInfo(cfg)
+		insp, err := schema.NewInspector(c)
+		if err != nil {
+			_ = c.Close(cmd.Context())
+			return err
+		}
 		m = app.NewWithOpts(app.Options{
 			Conn: c, Inspector: insp, ConnInfo: connInfo,
 			Stores: stores, Creds: creds, GitRoot: gitRoot,
@@ -63,6 +67,15 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return nil
+}
+
+// formatConnInfo renders a compact label for the status bar. Uses the path
+// for file-based drivers (sqlite) and user@host/db for server drivers.
+func formatConnInfo(cfg conn.ConnectionConfig) string {
+	if cfg.DriverOrDefault() == conn.DriverSQLite {
+		return "sqlite:" + cfg.Path
+	}
+	return fmt.Sprintf("%s@%s/%s", cfg.User, cfg.Host, cfg.DBName)
 }
 
 func applyTheme(cmd *cobra.Command) {

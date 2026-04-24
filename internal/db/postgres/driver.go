@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mdjarv/db/internal/db"
+	"github.com/mdjarv/db/internal/schema"
 )
 
 func init() {
@@ -32,15 +33,18 @@ func (d *Driver) Connect(ctx context.Context, dsn string) (db.Conn, error) {
 	}
 
 	tm := LoadTypeMap(ctx, pool)
-	return &conn{pool: pool, tm: tm}, nil
+	return &Conn{pool: pool, tm: tm}, nil
 }
 
-type conn struct {
+// Conn is the postgres db.Conn implementation. Exported so that callers can
+// type-assert to access postgres-specific extensions (e.g. TypeMap).
+type Conn struct {
 	pool *pgxpool.Pool
 	tm   *TypeMap
 }
 
-func (c *conn) Query(ctx context.Context, sql string, args ...any) (db.Result, error) {
+// Query runs a SQL query and returns a streaming result.
+func (c *Conn) Query(ctx context.Context, sql string, args ...any) (db.Result, error) {
 	rows, err := c.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return db.Result{}, fmt.Errorf("postgres: query: %w", err)
@@ -48,7 +52,8 @@ func (c *conn) Query(ctx context.Context, sql string, args ...any) (db.Result, e
 	return buildResult(rows, c.tm), nil
 }
 
-func (c *conn) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult, error) {
+// Exec runs a SQL statement and returns the affected-row count.
+func (c *Conn) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult, error) {
 	tag, err := c.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return db.ExecResult{}, fmt.Errorf("postgres: exec: %w", err)
@@ -56,7 +61,8 @@ func (c *conn) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult
 	return db.ExecResult{RowsAffected: tag.RowsAffected()}, nil
 }
 
-func (c *conn) Begin(ctx context.Context) (db.Tx, error) {
+// Begin starts a transaction.
+func (c *Conn) Begin(ctx context.Context) (db.Tx, error) {
 	pgTx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: begin: %w", err)
@@ -64,27 +70,20 @@ func (c *conn) Begin(ctx context.Context) (db.Tx, error) {
 	return &tx{pgTx: pgTx, tm: c.tm}, nil
 }
 
-func (c *conn) TypeDetail(oid uint32) db.TypeDetail {
-	d := db.TypeDetail{
-		OID:        oid,
-		Name:       c.tm.Resolve(oid),
-		EnumValues: c.tm.EnumValues(oid),
-	}
-	if pgFields := c.tm.CompositeFields(oid); pgFields != nil {
-		d.CompositeFields = make([]db.CompositeField, len(pgFields))
-		for i, f := range pgFields {
-			d.CompositeFields[i] = db.CompositeField{Name: f.Name, TypeName: f.TypeName}
-		}
-	}
-	if elemOID, ok := c.tm.ElemOID(oid); ok {
-		d.IsArray = true
-		d.ElemOID = elemOID
-		d.ElemTypeName = c.tm.Resolve(elemOID)
-	}
-	return d
+// Dialect returns the PostgreSQL SQL dialect.
+func (c *Conn) Dialect() db.Dialect { return db.PostgresDialect() }
+
+// Inspector returns a schema inspector for this connection.
+func (c *Conn) Inspector() schema.Inspector {
+	return schema.NewPostgresInspector(c)
 }
 
-func (c *conn) Close(_ context.Context) error {
+// TypeMap returns the live OID→type-name map loaded from pg_catalog.
+// Exposed for postgres-specific introspection (e.g. `db introspect`).
+func (c *Conn) TypeMap() *TypeMap { return c.tm }
+
+// Close tears down the pool.
+func (c *Conn) Close(_ context.Context) error {
 	c.pool.Close()
 	return nil
 }
@@ -109,6 +108,8 @@ func (t *tx) Exec(ctx context.Context, sql string, args ...any) (db.ExecResult, 
 	}
 	return db.ExecResult{RowsAffected: tag.RowsAffected()}, nil
 }
+
+func (t *tx) Dialect() db.Dialect { return db.PostgresDialect() }
 
 func (t *tx) Commit(ctx context.Context) error {
 	return t.pgTx.Commit(ctx)
